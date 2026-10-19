@@ -15,11 +15,35 @@ local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local CoreGui = game:GetService("CoreGui")
 
--- Clean up any existing instance
-local existing = playerGui:FindFirstChild("V4InterfaceGui")
+local function getTargetGuiParent(): Instance
+	if typeof(gethui) == "function" then
+		local h = gethui()
+		if h then return h end
+	end
+	local ok, _ = pcall(function()
+		local test = Instance.new("Folder")
+		test.Parent = CoreGui
+		test:Destroy()
+	end)
+	if ok then
+		return CoreGui
+	end
+	return player:WaitForChild("PlayerGui")
+end
+
+local targetGuiParent = getTargetGuiParent()
+
+-- Clean up any existing instance across possible parents
+local existing = targetGuiParent:FindFirstChild("V4InterfaceGui")
 if existing then existing:Destroy() end
+pcall(function()
+	local pGui = player:FindFirstChild("PlayerGui")
+	if pGui and pGui:FindFirstChild("V4InterfaceGui") then
+		pGui.V4InterfaceGui:Destroy()
+	end
+end)
 
 --------------------------------------------------------------------------------
 -- DESIGN TOKENS (1:1 with preview CSS variables and OKLCH color definitions)
@@ -579,7 +603,7 @@ end
 
 local function lockScrolling()
 	table.clear(disabledScrollingFrames)
-	local targetGui = playerGui:FindFirstChild("V4InterfaceGui")
+	local targetGui = gui
 	if targetGui then
 		for _, desc in ipairs(targetGui:GetDescendants()) do
 		if desc:IsA("ScrollingFrame") and desc.ScrollingEnabled then
@@ -814,7 +838,7 @@ local function createDropdown(parent: Instance, config: {
 		menu.BackgroundColor3 = Color3.fromRGB(22, 24, 29)
 		menu.BorderSizePixel = 0
 		menu.ZIndex = 500
-		menu.Parent = playerGui:FindFirstChild("V4InterfaceGui") or parent
+		menu.Parent = gui or parent
 		addCorner(menu, 6)
 		addStroke(menu, THEME.borderSubtle, 1, 0.2)
 
@@ -1016,7 +1040,7 @@ local function createMultiDropdown(parent: Instance, config: {
 		menu.BackgroundColor3 = Color3.fromRGB(22, 24, 29)
 		menu.BorderSizePixel = 0
 		menu.ZIndex = 500
-		menu.Parent = playerGui:FindFirstChild("V4InterfaceGui") or parent
+		menu.Parent = gui or parent
 		addCorner(menu, 6)
 		addStroke(menu, THEME.borderSubtle, 1, 0.2)
 
@@ -1153,7 +1177,9 @@ local gui = Instance.new("ScreenGui")
 gui.Name = "V4InterfaceGui"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = playerGui
+gui.DisplayOrder = 2147483647
+gui.IgnoreGuiInset = true
+gui.Parent = targetGuiParent
 
 UserInputService.InputBegan:Connect(function(inp)
 	if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
