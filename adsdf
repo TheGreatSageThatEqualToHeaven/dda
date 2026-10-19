@@ -13,6 +13,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
+local ContextActionService = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
@@ -1222,6 +1223,69 @@ scalerRoot.Size = UDim2.fromOffset(1180, 720)
 scalerRoot.BackgroundTransparency = 1
 scalerRoot.Visible = false -- prevent the completed UI flashing before the loader is mounted
 scalerRoot.Parent = gui
+
+scalerRoot.Parent = gui
+
+-- Invisible modal element unlocks mouse in first person and mouse lock modes
+local modalLock = Instance.new("TextButton")
+modalLock.Name = "FirstPersonModalUnlock"
+modalLock.BackgroundTransparency = 1
+modalLock.Text = ""
+modalLock.Size = UDim2.fromScale(1, 1)
+modalLock.Position = UDim2.fromScale(0, 0)
+modalLock.ZIndex = 0
+modalLock.Modal = false
+modalLock.Parent = scalerRoot
+
+local isInterfaceOpen = false
+local cursorLoopConn = nil
+local previousMouseBehavior = UserInputService.MouseBehavior
+
+local function disableGameControls()
+    ContextActionService:BindActionAtPriority(
+        "VapeUI_BlockInput",
+        function() return Enum.ContextActionResult.Sink end,
+        false,
+        Enum.ContextActionPriority.High.Value + 2000,
+        Enum.PlayerActions.CharacterForward,
+        Enum.PlayerActions.CharacterBackward,
+        Enum.PlayerActions.CharacterLeft,
+        Enum.PlayerActions.CharacterRight,
+        Enum.PlayerActions.CharacterJump
+    )
+end
+
+local function enableGameControls()
+    ContextActionService:UnbindAction("VapeUI_BlockInput")
+end
+
+local function setInterfaceActive(active: boolean)
+    isInterfaceOpen = active
+    modalLock.Modal = active
+    if active then
+        disableGameControls()
+        previousMouseBehavior = UserInputService.MouseBehavior
+        if cursorLoopConn then cursorLoopConn:Disconnect() end
+        cursorLoopConn = RunService.RenderStepped:Connect(function()
+            if isInterfaceOpen and scalerRoot.Visible then
+                if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+                    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                end
+                UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceShow
+            end
+        end)
+    else
+        enableGameControls()
+        if cursorLoopConn then
+            cursorLoopConn:Disconnect()
+            cursorLoopConn = nil
+        end
+        UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
+        pcall(function()
+            UserInputService.MouseBehavior = previousMouseBehavior or Enum.MouseBehavior.Default
+        end)
+    end
+end
 
 local uiScale = Instance.new("UIScale")
 uiScale.Parent = scalerRoot
@@ -3369,6 +3433,7 @@ local currentLoader: Instance? = nil
 
 local function animateWindowIn()
 	scalerRoot.Visible = true
+	setInterfaceActive(true)
 	local cam = workspace.CurrentCamera
 	local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
 	local targetScale = math.clamp(math.min((vp.X - 40) / 1200, (vp.Y - 40) / 740), 0.60, 1.15)
@@ -3396,6 +3461,7 @@ local function showLoadingScreen()
 
 	-- Hide the main interface during loading (1:1 with web preview)
 	scalerRoot.Visible = false
+	setInterfaceActive(false)
 
 	local loaderRoot = Instance.new("Frame")
 	loaderRoot.Name = "LoaderRoot"
@@ -3757,6 +3823,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	if input.KeyCode == Enum.KeyCode.RightShift then
 		if scalerRoot.Visible then
 			scalerRoot.Visible = false
+			setInterfaceActive(false)
 		else
 			animateWindowIn()
 		end
