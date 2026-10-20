@@ -614,15 +614,7 @@ end
 
 local function lockScrolling()
 	table.clear(disabledScrollingFrames)
-	local targetGui = gui
-	if targetGui then
-		for _, desc in ipairs(targetGui:GetDescendants()) do
-			if desc:IsA("ScrollingFrame") and desc.Name ~= "DropdownMenu" and desc.Name ~= "MultiDropdownMenu" and desc.ScrollingEnabled then
-				desc.ScrollingEnabled = false
-				table.insert(disabledScrollingFrames, desc)
-			end
-		end
-	end
+	-- Active overlay absorbs pointer and wheel input directly without costly tree traversal
 end
 
 local function closeActiveDropdown()
@@ -796,7 +788,7 @@ local function createDropdown(parent: Instance, config: {
 	callback: ((string) -> ())?
 })
 	local options = config.options or {}
-	local selected = config.default or options[1] or "Select..."
+	local selected = config.default or options[1] or "Select"
 
 	local triggerBtn = Instance.new("TextButton")
 	triggerBtn.Name = "DropdownTrigger_" .. (config.name or "Component")
@@ -845,8 +837,15 @@ local function createDropdown(parent: Instance, config: {
 		local absSize = triggerBtn.AbsoluteSize
 		local cam = workspace.CurrentCamera
 		local vpHeight = (cam and cam.ViewportSize.Y) or 1080
-		local isScrollable = (#options * 32 + 10) > 240
-		local menuHeight = isScrollable and 240 or (#options * 32 + 10)
+
+		local itemHeight = 28
+		local itemSpacing = 2
+		local padY = 4
+		local numOptions = #options
+		local totalContentHeight = (padY * 2) + (numOptions * itemHeight) + (math.max(0, numOptions - 1) * itemSpacing)
+		local maxHeight = 220
+		local isScrollable = totalContentHeight > maxHeight
+		local menuHeight = isScrollable and maxHeight or totalContentHeight
 		local menuWidth = math.max(150, absSize.X)
 
 		local posX = absPos.X
@@ -855,7 +854,7 @@ local function createDropdown(parent: Instance, config: {
 			posY = absPos.Y - menuHeight - 4
 		end
 
-		local menu = Instance.new(isScrollable and "ScrollingFrame" or "Frame")
+		local menu = Instance.new("ScrollingFrame")
 		menu.Name = "DropdownMenu"
 		menu.Position = UDim2.fromOffset(posX, posY)
 		menu.Size = UDim2.fromOffset(menuWidth, menuHeight)
@@ -863,12 +862,13 @@ local function createDropdown(parent: Instance, config: {
 		menu.BorderSizePixel = 0
 		menu.ZIndex = 100000
 		menu.ClipsDescendants = true
-		if isScrollable then
-			local sf = menu :: ScrollingFrame
-			sf.ScrollBarThickness = 3
-			sf.ScrollBarImageColor3 = THEME.border
-			sf.CanvasSize = UDim2.new(0, 0, 0, #options * 32 + 10)
-		end
+		menu.Active = true
+		menu.Selectable = false
+		menu.ScrollingEnabled = isScrollable
+		menu.ScrollingDirection = Enum.ScrollingDirection.Y
+		menu.ScrollBarThickness = isScrollable and 3 or 0
+		menu.ScrollBarImageColor3 = THEME.border
+		menu.CanvasSize = UDim2.new(0, 0, 0, totalContentHeight)
 		menu.Parent = gui
 		addCorner(menu, 6)
 		addStroke(menu, THEME.borderSubtle, 1, 0.2)
@@ -884,35 +884,38 @@ local function createDropdown(parent: Instance, config: {
 			local curPos = triggerBtn.AbsolutePosition
 			local curSize = triggerBtn.AbsoluteSize
 			local vpH = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y) or 1080
-			local mH = menu.AbsoluteSize.Y
 			local pY = curPos.Y + curSize.Y + 4
-			if pY + mH > vpH - 16 and (curPos.Y - mH - 4) >= 10 then
-				pY = curPos.Y - mH - 4
+			if pY + menuHeight > vpH - 16 and (curPos.Y - menuHeight - 4) >= 10 then
+				pY = curPos.Y - menuHeight - 4
 			end
 			menu.Position = UDim2.fromOffset(curPos.X, pY)
 		end)
 
 		local listLayout = Instance.new("UIListLayout")
-		listLayout.Padding = UDim.new(0, 2)
+		listLayout.Padding = UDim.new(0, itemSpacing)
 		listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		listLayout.Parent = menu
 
 		local pad = Instance.new("UIPadding")
-		pad.PaddingTop = UDim.new(0, 4)
-		pad.PaddingBottom = UDim.new(0, 4)
+		pad.PaddingTop = UDim.new(0, padY)
+		pad.PaddingBottom = UDim.new(0, padY)
 		pad.PaddingLeft = UDim.new(0, 4)
 		pad.PaddingRight = UDim.new(0, 4)
 		pad.Parent = menu
 
+		local optWidthOffset = isScrollable and -12 or -8
+
 		for idx, opt in ipairs(options) do
+			local isSelected = (opt == selected)
+
 			local optBtn = Instance.new("TextButton")
 			optBtn.Name = "Opt_" .. opt
 			optBtn.AutoButtonColor = false
-			optBtn.Size = UDim2.new(1, 0, 0, 28)
-			optBtn.BackgroundColor3 = (opt == selected) and THEME.accent or Color3.fromRGB(22, 24, 29)
+			optBtn.Size = UDim2.new(1, optWidthOffset, 0, itemHeight)
+			optBtn.BackgroundColor3 = isSelected and THEME.accent or Color3.fromRGB(22, 24, 29)
 			optBtn.BorderSizePixel = 0
 			optBtn.Text = ""
-			optBtn.ZIndex = 501
+			optBtn.ZIndex = 100001
 			optBtn.LayoutOrder = idx
 			optBtn.Parent = menu
 			addCorner(optBtn, 4)
@@ -923,18 +926,18 @@ local function createDropdown(parent: Instance, config: {
 			checkIndicator.AnchorPoint = Vector2.new(0, 0.5)
 			checkIndicator.Position = UDim2.new(0, 8, 0.5, 0)
 			checkIndicator.Size = UDim2.fromOffset(16, 16)
-			checkIndicator.BackgroundColor3 = (opt == selected) and THEME.primary or THEME.panelRaised
+			checkIndicator.BackgroundColor3 = isSelected and THEME.primary or THEME.panelRaised
 			checkIndicator.BorderSizePixel = 0
-			checkIndicator.ZIndex = 502
+			checkIndicator.ZIndex = 100002
 			checkIndicator.Parent = optBtn
 			addCorner(checkIndicator, 3)
-			addStroke(checkIndicator, (opt == selected) and THEME.primary or THEME.borderSubtle, 1, 0.3)
+			addStroke(checkIndicator, isSelected and THEME.primary or THEME.borderSubtle, 1, 0.3)
 
 			local checkIcon = createIcon(checkIndicator, "check", 11, THEME.bgWindow)
 			checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 			checkIcon.Position = UDim2.fromScale(0.5, 0.5)
-			checkIcon.Visible = (opt == selected)
-			checkIcon.ZIndex = 503
+			checkIcon.Visible = isSelected
+			checkIcon.ZIndex = 100003
 
 			local optLbl = Instance.new("TextLabel")
 			optLbl.AnchorPoint = Vector2.new(0, 0.5)
@@ -942,12 +945,23 @@ local function createDropdown(parent: Instance, config: {
 			optLbl.Size = UDim2.new(1, -36, 1, 0)
 			optLbl.BackgroundTransparency = 1
 			optLbl.Text = opt
-			optLbl.TextColor3 = (opt == selected) and Color3.fromRGB(255, 255, 255) or THEME.textPrimary
+			optLbl.TextColor3 = isSelected and Color3.fromRGB(255, 255, 255) or THEME.textPrimary
 			optLbl.TextSize = 11
-			optLbl.Font = (opt == selected) and Enum.Font.GothamBold or Enum.Font.Gotham
+			optLbl.Font = isSelected and Enum.Font.GothamBold or Enum.Font.Gotham
 			optLbl.TextXAlignment = Enum.TextXAlignment.Left
-			optLbl.ZIndex = 502
+			optLbl.ZIndex = 100002
 			optLbl.Parent = optBtn
+
+			optBtn.MouseEnter:Connect(function()
+				if opt ~= selected then
+					TweenService:Create(optBtn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(28, 30, 36) }):Play()
+				end
+			end)
+			optBtn.MouseLeave:Connect(function()
+				if opt ~= selected then
+					TweenService:Create(optBtn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(22, 24, 29) }):Play()
+				end
+			end)
 
 			optBtn.Activated:Connect(function()
 				selected = opt
@@ -968,13 +982,24 @@ local function createDropdown(parent: Instance, config: {
 		end
 	end
 
-	triggerBtn.Activated:Connect(function()
-		if os.clock() - lastDropdownToggleTime < 0.15 then return end
+	local function toggleDropdown()
 		if isOpen then
 			closeActiveDropdown()
 		else
 			openMenu()
 		end
+	end
+
+	local lastToggle = 0
+	triggerBtn.MouseButton1Down:Connect(function()
+		lastToggle = os.clock()
+		toggleDropdown()
+	end)
+
+	triggerBtn.Activated:Connect(function()
+		if os.clock() - lastToggle < 0.15 then return end
+		lastToggle = os.clock()
+		toggleDropdown()
 	end)
 
 	return triggerBtn, {
@@ -1070,8 +1095,15 @@ local function createMultiDropdown(parent: Instance, config: {
 		local absSize = triggerBtn.AbsoluteSize
 		local cam = workspace.CurrentCamera
 		local vpHeight = (cam and cam.ViewportSize.Y) or 1080
-		local isScrollable = (#options * 32 + 10) > 240
-		local menuHeight = isScrollable and 240 or (#options * 32 + 10)
+
+		local itemHeight = 28
+		local itemSpacing = 2
+		local padY = 4
+		local numOptions = #options
+		local totalContentHeight = (padY * 2) + (numOptions * itemHeight) + (math.max(0, numOptions - 1) * itemSpacing)
+		local maxHeight = 220
+		local isScrollable = totalContentHeight > maxHeight
+		local menuHeight = isScrollable and maxHeight or totalContentHeight
 		local menuWidth = math.max(150, absSize.X)
 
 		local posX = absPos.X
@@ -1080,7 +1112,7 @@ local function createMultiDropdown(parent: Instance, config: {
 			posY = absPos.Y - menuHeight - 4
 		end
 
-		local menu = Instance.new(isScrollable and "ScrollingFrame" or "Frame")
+		local menu = Instance.new("ScrollingFrame")
 		menu.Name = "MultiDropdownMenu"
 		menu.Position = UDim2.fromOffset(posX, posY)
 		menu.Size = UDim2.fromOffset(menuWidth, menuHeight)
@@ -1088,12 +1120,13 @@ local function createMultiDropdown(parent: Instance, config: {
 		menu.BorderSizePixel = 0
 		menu.ZIndex = 100000
 		menu.ClipsDescendants = true
-		if isScrollable then
-			local sf = menu :: ScrollingFrame
-			sf.ScrollBarThickness = 3
-			sf.ScrollBarImageColor3 = THEME.border
-			sf.CanvasSize = UDim2.new(0, 0, 0, #options * 32 + 10)
-		end
+		menu.Active = true
+		menu.Selectable = false
+		menu.ScrollingEnabled = isScrollable
+		menu.ScrollingDirection = Enum.ScrollingDirection.Y
+		menu.ScrollBarThickness = isScrollable and 3 or 0
+		menu.ScrollBarImageColor3 = THEME.border
+		menu.CanvasSize = UDim2.new(0, 0, 0, totalContentHeight)
 		menu.Parent = gui
 		addCorner(menu, 6)
 		addStroke(menu, THEME.borderSubtle, 1, 0.2)
@@ -1109,25 +1142,26 @@ local function createMultiDropdown(parent: Instance, config: {
 			local curPos = triggerBtn.AbsolutePosition
 			local curSize = triggerBtn.AbsoluteSize
 			local vpH = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y) or 1080
-			local mH = menu.AbsoluteSize.Y
 			local pY = curPos.Y + curSize.Y + 4
-			if pY + mH > vpH - 16 and (curPos.Y - mH - 4) >= 10 then
-				pY = curPos.Y - mH - 4
+			if pY + menuHeight > vpH - 16 and (curPos.Y - menuHeight - 4) >= 10 then
+				pY = curPos.Y - menuHeight - 4
 			end
 			menu.Position = UDim2.fromOffset(curPos.X, pY)
 		end)
 
 		local listLayout = Instance.new("UIListLayout")
-		listLayout.Padding = UDim.new(0, 2)
+		listLayout.Padding = UDim.new(0, itemSpacing)
 		listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		listLayout.Parent = menu
 
 		local pad = Instance.new("UIPadding")
-		pad.PaddingTop = UDim.new(0, 4)
-		pad.PaddingBottom = UDim.new(0, 4)
+		pad.PaddingTop = UDim.new(0, padY)
+		pad.PaddingBottom = UDim.new(0, padY)
 		pad.PaddingLeft = UDim.new(0, 4)
 		pad.PaddingRight = UDim.new(0, 4)
 		pad.Parent = menu
+
+		local optWidthOffset = isScrollable and -12 or -8
 
 		for idx, opt in ipairs(options) do
 			local isOptSelected = selectedSet[opt] == true
@@ -1135,11 +1169,11 @@ local function createMultiDropdown(parent: Instance, config: {
 			local optBtn = Instance.new("TextButton")
 			optBtn.Name = "MultiOpt_" .. opt
 			optBtn.AutoButtonColor = false
-			optBtn.Size = UDim2.new(1, 0, 0, 28)
+			optBtn.Size = UDim2.new(1, optWidthOffset, 0, itemHeight)
 			optBtn.BackgroundColor3 = isOptSelected and THEME.accent or Color3.fromRGB(22, 24, 29)
 			optBtn.BorderSizePixel = 0
 			optBtn.Text = ""
-			optBtn.ZIndex = 501
+			optBtn.ZIndex = 100001
 			optBtn.LayoutOrder = idx
 			optBtn.Parent = menu
 			addCorner(optBtn, 4)
@@ -1152,7 +1186,7 @@ local function createMultiDropdown(parent: Instance, config: {
 			checkIndicator.Size = UDim2.fromOffset(16, 16)
 			checkIndicator.BackgroundColor3 = isOptSelected and THEME.primary or THEME.panelRaised
 			checkIndicator.BorderSizePixel = 0
-			checkIndicator.ZIndex = 502
+			checkIndicator.ZIndex = 100002
 			checkIndicator.Parent = optBtn
 			addCorner(checkIndicator, 3)
 			addStroke(checkIndicator, isOptSelected and THEME.primary or THEME.borderSubtle, 1, 0.3)
@@ -1161,7 +1195,7 @@ local function createMultiDropdown(parent: Instance, config: {
 			checkIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 			checkIcon.Position = UDim2.fromScale(0.5, 0.5)
 			checkIcon.Visible = isOptSelected
-			checkIcon.ZIndex = 503
+			checkIcon.ZIndex = 100003
 
 			local optLbl = Instance.new("TextLabel")
 			optLbl.AnchorPoint = Vector2.new(0, 0.5)
@@ -1173,8 +1207,19 @@ local function createMultiDropdown(parent: Instance, config: {
 			optLbl.TextSize = 11
 			optLbl.Font = isOptSelected and Enum.Font.GothamBold or Enum.Font.Gotham
 			optLbl.TextXAlignment = Enum.TextXAlignment.Left
-			optLbl.ZIndex = 502
+			optLbl.ZIndex = 100002
 			optLbl.Parent = optBtn
+
+			optBtn.MouseEnter:Connect(function()
+				if not selectedSet[opt] then
+					TweenService:Create(optBtn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(28, 30, 36) }):Play()
+				end
+			end)
+			optBtn.MouseLeave:Connect(function()
+				if not selectedSet[opt] then
+					TweenService:Create(optBtn, TweenInfo.new(0.12), { BackgroundColor3 = Color3.fromRGB(22, 24, 29) }):Play()
+				end
+			end)
 
 			optBtn.Activated:Connect(function()
 				if selectedSet[opt] then
@@ -1205,13 +1250,24 @@ local function createMultiDropdown(parent: Instance, config: {
 		end
 	end
 
-	triggerBtn.Activated:Connect(function()
-		if os.clock() - lastDropdownToggleTime < 0.15 then return end
+	local function toggleDropdown()
 		if isOpen then
 			closeActiveDropdown()
 		else
 			openMenu()
 		end
+	end
+
+	local lastToggle = 0
+	triggerBtn.MouseButton1Down:Connect(function()
+		lastToggle = os.clock()
+		toggleDropdown()
+	end)
+
+	triggerBtn.Activated:Connect(function()
+		if os.clock() - lastToggle < 0.15 then return end
+		lastToggle = os.clock()
+		toggleDropdown()
 	end)
 
 	return triggerBtn, {
@@ -1225,7 +1281,6 @@ local function createMultiDropdown(parent: Instance, config: {
 		Get = getSelectedList,
 	}
 end
-
 
 --------------------------------------------------------------------------------
 -- SCREEN GUI ROOT & SCALER
@@ -1257,10 +1312,17 @@ UserInputService.InputBegan:Connect(function(inp)
 	end
 end)
 
--- Auto-close dropdown immediately when the mouse wheel is scrolled
+-- Auto-close dropdown only when mouse wheel is scrolled OUTSIDE the dropdown menu
 UserInputService.InputChanged:Connect(function(inp)
 	if activeDropdownMenu and inp.UserInputType == Enum.UserInputType.MouseWheel then
-		closeActiveDropdown()
+		local mousePos = UserInputService:GetMouseLocation()
+		local mPos = activeDropdownMenu.AbsolutePosition
+		local mSize = activeDropdownMenu.AbsoluteSize
+		local inMenu = (mousePos.X >= mPos.X and mousePos.X <= mPos.X + mSize.X
+			and mousePos.Y >= mPos.Y and mousePos.Y <= mPos.Y + mSize.Y)
+		if not inMenu then
+			closeActiveDropdown()
+		end
 	end
 end)
 
