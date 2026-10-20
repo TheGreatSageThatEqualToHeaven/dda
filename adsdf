@@ -141,6 +141,7 @@ type ModuleItem = {
 	summary: string,
 	bind: string?,
 	active: boolean?,
+	default: any?,
 	kind: string?, -- "toggle" (default), "button", "textbox", "info", "slider", "dropdown", "multidropdown"
 	buttonText: string?,
 	placeholder: string?,
@@ -156,6 +157,7 @@ type ModuleItem = {
 	onClick: (() -> ())?,
 	onInput: ((string) -> ())?,
 	onToggle: ((boolean) -> ())?,
+	callback: ((any) -> ())?,
 }
 
 local defaultModules: {ModuleItem} = {
@@ -196,9 +198,39 @@ local defaultCategories = {
 }
 local categories = (type(libraryEnvironment.VapeHubCategories) == "table" and libraryEnvironment.VapeHubCategories) or defaultCategories
 
+local function safeCall(fn: any, ...)
+	if type(fn) ~= "function" then return end
+	local args = { ... }
+	task.spawn(function()
+		local ok, err = pcall(fn, table.unpack(args))
+		if not ok then
+			warn("[VapeHubUI] Callback error: " .. tostring(err))
+		end
+	end)
+end
+
 local enabledState: {[string]: boolean} = {}
 for _, m in ipairs(modules) do
-	enabledState[m.name] = (m.active == true)
+	local kind = m.kind or "toggle"
+	if kind == "toggle" then
+		enabledState[m.name] = (m.active == true or m.default == true)
+	elseif kind == "slider" then
+		if m.value == nil then
+			m.value = m.default or m.min or 0
+		end
+	elseif kind == "dropdown" then
+		if m.selected == nil then
+			m.selected = m.default or (m.options and m.options[1])
+		end
+	elseif kind == "multidropdown" then
+		if m.selected == nil then
+			m.selected = m.default or {}
+		end
+	elseif kind == "textbox" then
+		if m.value == nil then
+			m.value = m.default or ""
+		end
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -236,6 +268,8 @@ local function configPath(name: string): string
 	return CONFIG_FOLDER .. "/" .. sanitizeConfigName(name) .. CONFIG_EXTENSION
 end
 
+local memoryConfigs: {[string]: any} = {}
+
 local function captureConfig(): {[string]: any}
 	local data = {
 		version = 1,
@@ -245,11 +279,15 @@ local function captureConfig(): {[string]: any}
 		local kind = item.kind or "toggle"
 		local entry: {[string]: any} = { kind = kind }
 		if kind == "toggle" then
-			entry.value = enabledState[item.name] == true
-		elseif kind == "slider" or kind == "textbox" then
-			entry.value = item.value
-		elseif kind == "dropdown" or kind == "multidropdown" then
-			entry.value = item.selected
+			entry.value = (enabledState[item.name] == true)
+		elseif kind == "slider" then
+			entry.value = item.value or item.default or (item.min or 0)
+		elseif kind == "textbox" then
+			entry.value = item.value or item.default or ""
+		elseif kind == "dropdown" then
+			entry.value = item.selected or item.default or (item.options and item.options[1])
+		elseif kind == "multidropdown" then
+			entry.value = item.selected or item.default or {}
 		else
 			continue
 		end
@@ -262,39 +300,84 @@ end
 local function saveNamedConfig(name: string): (boolean, string)
 	local safeName = sanitizeConfigName(name)
 	if safeName == "" then return false, "Enter a config name." end
-	if not ensureConfigFolder() then return false, "File saving is unavailable in this environment." end
-	local ok, err = pcall(function()
-		writefile(configPath(safeName), HttpService:JSONEncode(captureConfig()))
-	end)
-	return ok, ok and ("Saved " .. safeName) or ("Save failed: " .. tostring(err))
+	local payload = captureConfig()
+	if configApisAvailable() then
+		if not ensureConfigFolder() then return false, "File saving is unavailable in this environment." end
+		local ok, err = pcall(function()
+			writefile(configPath(safeName), HttpService:JSONEncode(payload))
+		end)
+		if ok then
+			memoryConfigs[safeName] = payload
+		end
+		return ok, ok and ("Saved " .. safeName) or ("Save failed: " .. tostring(err))
+	else
+		memoryConfigs[safeName] = payload
+		return true, "Saved " .. safeName
+	end
 end
 
 local function loadNamedConfig(name: string): (boolean, string)
 	local safeName = sanitizeConfigName(name)
 	if safeName == "" then return false, "Select a config first." end
-	if not ensureConfigFolder() then return false, "File loading is unavailable in this environment." end
-	local path = configPath(safeName)
-	if not isfile(path) then return false, "Config not found." end
-	local ok, decoded = pcall(function()
-		return HttpService:JSONDecode(readfile(path))
-	end)
-	if not ok or type(decoded) ~= "table" or type(decoded.controls) ~= "table" then
-		return false, "Config data is invalid."
+	local decoded: any = nil
+	if configApisAvailable() then
+		if not ensureConfigFolder() then return false, "File loading is unavailable in this environment." end
+		local path = configPath(safeName)
+		if not isfile(path) then return false, "Config not found." end
+		local ok, result = pcall(function()
+			return HttpService:JSONDecode(readfile(path))
+		end)
+		if not ok or type(result) ~= "table" or type(result.controls) ~= "table" then
+			return false, "Config data is invalid."
+		end
+		decoded = result
+	else
+		if not memoryConfigs[safeName] then return false, "Config not found." end
+		decoded = memoryConfigs[safeName]
 	end
+
 	for _, item in ipairs(modules) do
 		local entry = decoded.controls[item.name]
 		if type(entry) == "table" then
 			local kind = item.kind or "toggle"
 			if kind == "toggle" and type(entry.value) == "boolean" then
 				enabledState[item.name] = entry.value
+				local fn = item.onToggle or item.callback
+				if fn then
+					safeCall(fn, entry.value)
+				end
 			elseif kind == "slider" and type(entry.value) == "number" then
-				item.value = math.clamp(entry.value, item.min or 0, item.max or 100)
+				local minVal = item.min or 0
+				local maxVal = item.max or 100
+				local step = item.step or 1
+				local clamped = math.clamp(entry.value, minVal, maxVal)
+				if step > 0 then
+					clamped = math.round((clamped - minVal) / step) * step + minVal
+					clamped = math.clamp(clamped, minVal, maxVal)
+				end
+				item.value = clamped
+				local fn = item.onSlide or item.callback
+				if fn then
+					safeCall(fn, clamped)
+				end
 			elseif kind == "textbox" and type(entry.value) == "string" then
 				item.value = entry.value
+				local fn = item.onInput or item.callback
+				if fn then
+					safeCall(fn, entry.value)
+				end
 			elseif kind == "dropdown" and type(entry.value) == "string" then
 				item.selected = entry.value
+				local fn = item.onSelect or item.callback
+				if fn then
+					safeCall(fn, entry.value)
+				end
 			elseif kind == "multidropdown" and type(entry.value) == "table" then
 				item.selected = entry.value
+				local fn = item.onSelect or item.callback
+				if fn then
+					safeCall(fn, entry.value)
+				end
 			end
 			if entry.bind == nil or type(entry.bind) == "string" then
 				item.bind = entry.bind
@@ -307,24 +390,41 @@ end
 local function deleteNamedConfig(name: string): (boolean, string)
 	local safeName = sanitizeConfigName(name)
 	if safeName == "" then return false, "Select a config first." end
-	if not ensureConfigFolder() or typeof(delfile) ~= "function" then
-		return false, "File deletion is unavailable in this environment."
+	if configApisAvailable() then
+		if not ensureConfigFolder() or typeof(delfile) ~= "function" then
+			return false, "File deletion is unavailable in this environment."
+		end
+		local path = configPath(safeName)
+		if not isfile(path) then return false, "Config not found." end
+		local ok, err = pcall(function() delfile(path) end)
+		if ok then
+			memoryConfigs[safeName] = nil
+		end
+		return ok, ok and ("Deleted " .. safeName) or ("Delete failed: " .. tostring(err))
+	else
+		if not memoryConfigs[safeName] then return false, "Config not found." end
+		memoryConfigs[safeName] = nil
+		return true, "Deleted " .. safeName
 	end
-	local path = configPath(safeName)
-	if not isfile(path) then return false, "Config not found." end
-	local ok, err = pcall(function() delfile(path) end)
-	return ok, ok and ("Deleted " .. safeName) or ("Delete failed: " .. tostring(err))
 end
 
 local function listNamedConfigs(): {string}
-	if not ensureConfigFolder() then return {} end
-	local ok, files = pcall(function() return listfiles(CONFIG_FOLDER) end)
-	if not ok or type(files) ~= "table" then return {} end
 	local names = {}
-	for _, path in ipairs(files) do
-		local normalized = tostring(path):gsub("\\", "/")
-		local fileName = normalized:match("([^/]+)%.json$")
-		if fileName then table.insert(names, fileName) end
+	if configApisAvailable() then
+		if ensureConfigFolder() then
+			local ok, files = pcall(function() return listfiles(CONFIG_FOLDER) end)
+		if ok and type(files) == "table" then
+			for _, path in ipairs(files) do
+				local normalized = tostring(path):gsub("\\", "/")
+				local fileName = normalized:match("([^/]+)%.json$")
+				if fileName then table.insert(names, fileName) end
+			end
+		end
+		end
+	else
+		for name, _ in pairs(memoryConfigs) do
+			table.insert(names, name)
+		end
 	end
 	table.sort(names, function(a, b) return a:lower() < b:lower() end)
 	return names
@@ -2113,6 +2213,8 @@ local function openDrawer(item: ModuleItem)
 				badge.Text = val and "ON" or "OFF"
 				badge.BackgroundColor3 = val and THEME.primary or THEME.accent
 				badge.TextColor3 = val and THEME.bgWindow or THEME.textMuted
+				local fn = item.onToggle or item.callback
+				if fn then safeCall(fn, val) end
 				if refreshModules then refreshModules() end
 			end
 		end)
@@ -2324,8 +2426,9 @@ refreshModules = function()
 				btn.Activated:Connect(function()
 					suppressRowOpen = true
 					task.delay(0.2, function() suppressRowOpen = false end)
-					if item.onClick then
-						item.onClick()
+					local fn = item.onClick or item.callback
+					if fn then
+						safeCall(fn)
 					else
 						print("[" .. item.name .. "] Button clicked")
 					end
@@ -2375,8 +2478,9 @@ refreshModules = function()
 					TweenService:Create(inputStroke, TweenInfo.new(0.2), { Color = THEME.borderSubtle, Transparency = 0.4 }):Play()
 					TweenService:Create(inputFrame, TweenInfo.new(0.2), { BackgroundColor3 = THEME.panelRaised }):Play()
 					item.value = tb.Text
-					if item.onInput then
-						item.onInput(tb.Text)
+					local fn = item.onInput or item.callback
+					if fn then
+						safeCall(fn, tb.Text)
 					else
 						print("[" .. item.name .. "] Input set: " .. tb.Text)
 					end
@@ -2398,14 +2502,15 @@ refreshModules = function()
 					name = item.name,
 					min = item.min or 0,
 					max = item.max or 100,
-					default = item.value or 50,
+					default = item.value or item.default or 50,
 					step = item.step or 1,
 					unit = item.unit or "",
 					size = UDim2.fromScale(1, 1),
 					callback = function(val)
 						item.value = val
-						if item.onSlide then
-							item.onSlide(val)
+						local fn = item.onSlide or item.callback
+						if fn then
+							safeCall(fn, val)
 						end
 					end
 				})
@@ -2425,12 +2530,13 @@ refreshModules = function()
 				createDropdown(dropHolder, {
 					name = item.name,
 					options = item.options or {"Option 1", "Option 2", "Option 3"},
-					default = item.selected or (item.options and item.options[1]),
+					default = item.selected or item.default or (item.options and item.options[1]),
 					size = UDim2.fromScale(1, 1),
 					callback = function(val)
 						item.selected = val
-						if item.onSelect then
-							item.onSelect(val)
+						local fn = item.onSelect or item.callback
+						if fn then
+							safeCall(fn, val)
 						end
 					end
 				})
@@ -2450,12 +2556,13 @@ refreshModules = function()
 				createMultiDropdown(multiHolder, {
 					name = item.name,
 					options = item.options or {"Option A", "Option B", "Option C"},
-					default = (type(item.selected) == "table" and item.selected) or nil,
+					default = (type(item.selected) == "table" and item.selected) or (type(item.default) == "table" and item.default) or nil,
 					size = UDim2.fromScale(1, 1),
 					callback = function(vals)
 						item.selected = vals
-						if item.onSelect then
-							item.onSelect(vals)
+						local fn = item.onSelect or item.callback
+						if fn then
+							safeCall(fn, vals)
 						end
 					end
 				})
@@ -2552,7 +2659,8 @@ refreshModules = function()
 				local toggleTrack = createToggle(toggleHolder, isEnabled, function(state)
 					enabledState[item.name] = state
 					accentPill.BackgroundColor3 = state and THEME.primary or THEME.accent
-					if item.onToggle then item.onToggle(state) end
+					local fn = item.onToggle or item.callback
+					if fn then safeCall(fn, state) end
 				end)
 				toggleTrack.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -3955,7 +4063,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		for _, m in ipairs(modules) do
 			if m.bind == keyName then
 				enabledState[m.name] = not enabledState[m.name]
-				if m.onToggle then m.onToggle(enabledState[m.name]) end
+				local fn = m.onToggle or m.callback
+				if fn then safeCall(fn, enabledState[m.name]) end
 				if refreshModules then refreshModules() end
 			end
 		end
