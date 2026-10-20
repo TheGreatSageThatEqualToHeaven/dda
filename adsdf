@@ -46,6 +46,16 @@ pcall(function()
 	end
 end)
 
+-- ScreenGui is instantiated early so all floating overlays, components, and listeners
+-- have a valid root reference without lexical scoping or nil-upvalue issues.
+local gui = Instance.new("ScreenGui")
+gui.Name = "V4InterfaceGui"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.DisplayOrder = 2147483647
+gui.IgnoreGuiInset = true
+gui.Parent = targetGuiParent
+
 --------------------------------------------------------------------------------
 -- DESIGN TOKENS (1:1 with preview CSS variables and OKLCH color definitions)
 --------------------------------------------------------------------------------
@@ -607,7 +617,7 @@ local function lockScrolling()
 	local targetGui = gui
 	if targetGui then
 		for _, desc in ipairs(targetGui:GetDescendants()) do
-		if desc:IsA("ScrollingFrame") and desc.ScrollingEnabled then
+			if desc:IsA("ScrollingFrame") and desc.Name ~= "DropdownMenu" and desc.Name ~= "MultiDropdownMenu" and desc.ScrollingEnabled then
 				desc.ScrollingEnabled = false
 				table.insert(disabledScrollingFrames, desc)
 			end
@@ -791,6 +801,7 @@ local function createDropdown(parent: Instance, config: {
 	local triggerBtn = Instance.new("TextButton")
 	triggerBtn.Name = "DropdownTrigger_" .. (config.name or "Component")
 	triggerBtn.AutoButtonColor = false
+	triggerBtn.Active = true
 	triggerBtn.Size = config.size or UDim2.fromOffset(150, 32)
 	triggerBtn.BackgroundColor3 = THEME.panelRaised
 	triggerBtn.BorderSizePixel = 0
@@ -830,33 +841,55 @@ local function createDropdown(parent: Instance, config: {
 		chevron.Rotation = -90
 		stroke.Color = THEME.primary
 
-		local menu = Instance.new("Frame")
-		menu.Name = "DropdownMenu"
 		local absPos = triggerBtn.AbsolutePosition
 		local absSize = triggerBtn.AbsoluteSize
-		menu.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y + 4)
-		menu.Size = UDim2.fromOffset(math.max(150, absSize.X), #options * 32 + 10)
+		local cam = workspace.CurrentCamera
+		local vpHeight = (cam and cam.ViewportSize.Y) or 1080
+		local isScrollable = (#options * 32 + 10) > 240
+		local menuHeight = isScrollable and 240 or (#options * 32 + 10)
+		local menuWidth = math.max(150, absSize.X)
+
+		local posX = absPos.X
+		local posY = absPos.Y + absSize.Y + 4
+		if posY + menuHeight > vpHeight - 16 and (absPos.Y - menuHeight - 4) >= 10 then
+			posY = absPos.Y - menuHeight - 4
+		end
+
+		local menu = Instance.new(isScrollable and "ScrollingFrame" or "Frame")
+		menu.Name = "DropdownMenu"
+		menu.Position = UDim2.fromOffset(posX, posY)
+		menu.Size = UDim2.fromOffset(menuWidth, menuHeight)
 		menu.BackgroundColor3 = Color3.fromRGB(22, 24, 29)
 		menu.BorderSizePixel = 0
-		menu.ZIndex = 500
-		menu.Parent = gui or parent
+		menu.ZIndex = 100000
+		menu.ClipsDescendants = true
+		if isScrollable then
+			local sf = menu :: ScrollingFrame
+			sf.ScrollBarThickness = 3
+			sf.ScrollBarImageColor3 = THEME.border
+			sf.CanvasSize = UDim2.new(0, 0, 0, #options * 32 + 10)
+		end
+		menu.Parent = gui
 		addCorner(menu, 6)
 		addStroke(menu, THEME.borderSubtle, 1, 0.2)
 
-		local initialTriggerPos = triggerBtn.AbsolutePosition
 		lockScrolling()
 
-		-- Auto-close immediately if scrolling occurs or position changes
+		-- Keep menu position tracking triggerBtn dynamically while open
 		activeDropdownRenderConn = RunService.RenderStepped:Connect(function()
 			if not triggerBtn or not triggerBtn.Parent or not triggerBtn.Visible then
 				closeActiveDropdown()
 				return
 			end
 			local curPos = triggerBtn.AbsolutePosition
-			if math.abs(curPos.X - initialTriggerPos.X) > 8 or math.abs(curPos.Y - initialTriggerPos.Y) > 8 then
-				closeActiveDropdown()
-				return
+			local curSize = triggerBtn.AbsoluteSize
+			local vpH = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y) or 1080
+			local mH = menu.AbsoluteSize.Y
+			local pY = curPos.Y + curSize.Y + 4
+			if pY + mH > vpH - 16 and (curPos.Y - mH - 4) >= 10 then
+				pY = curPos.Y - mH - 4
 			end
+			menu.Position = UDim2.fromOffset(curPos.X, pY)
 		end)
 
 		local listLayout = Instance.new("UIListLayout")
@@ -993,6 +1026,7 @@ local function createMultiDropdown(parent: Instance, config: {
 	local triggerBtn = Instance.new("TextButton")
 	triggerBtn.Name = "MultiDropdownTrigger_" .. (config.name or "Component")
 	triggerBtn.AutoButtonColor = false
+	triggerBtn.Active = true
 	triggerBtn.Size = config.size or UDim2.fromOffset(150, 32)
 	triggerBtn.BackgroundColor3 = THEME.panelRaised
 	triggerBtn.BorderSizePixel = 0
@@ -1032,33 +1066,55 @@ local function createMultiDropdown(parent: Instance, config: {
 		chevron.Rotation = -90
 		stroke.Color = THEME.primary
 
-		local menu = Instance.new("Frame")
-		menu.Name = "MultiDropdownMenu"
 		local absPos = triggerBtn.AbsolutePosition
 		local absSize = triggerBtn.AbsoluteSize
-		menu.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y + 4)
-		menu.Size = UDim2.fromOffset(math.max(150, absSize.X), #options * 32 + 10)
+		local cam = workspace.CurrentCamera
+		local vpHeight = (cam and cam.ViewportSize.Y) or 1080
+		local isScrollable = (#options * 32 + 10) > 240
+		local menuHeight = isScrollable and 240 or (#options * 32 + 10)
+		local menuWidth = math.max(150, absSize.X)
+
+		local posX = absPos.X
+		local posY = absPos.Y + absSize.Y + 4
+		if posY + menuHeight > vpHeight - 16 and (absPos.Y - menuHeight - 4) >= 10 then
+			posY = absPos.Y - menuHeight - 4
+		end
+
+		local menu = Instance.new(isScrollable and "ScrollingFrame" or "Frame")
+		menu.Name = "MultiDropdownMenu"
+		menu.Position = UDim2.fromOffset(posX, posY)
+		menu.Size = UDim2.fromOffset(menuWidth, menuHeight)
 		menu.BackgroundColor3 = Color3.fromRGB(22, 24, 29)
 		menu.BorderSizePixel = 0
-		menu.ZIndex = 500
-		menu.Parent = gui or parent
+		menu.ZIndex = 100000
+		menu.ClipsDescendants = true
+		if isScrollable then
+			local sf = menu :: ScrollingFrame
+			sf.ScrollBarThickness = 3
+			sf.ScrollBarImageColor3 = THEME.border
+			sf.CanvasSize = UDim2.new(0, 0, 0, #options * 32 + 10)
+		end
+		menu.Parent = gui
 		addCorner(menu, 6)
 		addStroke(menu, THEME.borderSubtle, 1, 0.2)
 
-		local initialTriggerPos = triggerBtn.AbsolutePosition
 		lockScrolling()
 
-		-- Auto-close immediately if scrolling occurs or position changes
+		-- Keep menu position tracking triggerBtn dynamically while open
 		activeDropdownRenderConn = RunService.RenderStepped:Connect(function()
 			if not triggerBtn or not triggerBtn.Parent or not triggerBtn.Visible then
 				closeActiveDropdown()
 				return
 			end
 			local curPos = triggerBtn.AbsolutePosition
-			if math.abs(curPos.X - initialTriggerPos.X) > 8 or math.abs(curPos.Y - initialTriggerPos.Y) > 8 then
-				closeActiveDropdown()
-				return
+			local curSize = triggerBtn.AbsoluteSize
+			local vpH = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y) or 1080
+			local mH = menu.AbsoluteSize.Y
+			local pY = curPos.Y + curSize.Y + 4
+			if pY + mH > vpH - 16 and (curPos.Y - mH - 4) >= 10 then
+				pY = curPos.Y - mH - 4
 			end
+			menu.Position = UDim2.fromOffset(curPos.X, pY)
 		end)
 
 		local listLayout = Instance.new("UIListLayout")
@@ -1174,13 +1230,7 @@ end
 --------------------------------------------------------------------------------
 -- SCREEN GUI ROOT & SCALER
 --------------------------------------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "V4InterfaceGui"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.DisplayOrder = 2147483647
-gui.IgnoreGuiInset = true
-gui.Parent = targetGuiParent
+-- Root ScreenGui was initialized at top level to ensure global scope across all helper functions.
 
 UserInputService.InputBegan:Connect(function(inp)
 	if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
@@ -1188,15 +1238,15 @@ UserInputService.InputBegan:Connect(function(inp)
 			local mousePos = inp.Position
 			local mPos = activeDropdownMenu.AbsolutePosition
 			local mSize = activeDropdownMenu.AbsoluteSize
-			local inMenu = (mousePos.X >= mPos.X and mousePos.X <= mPos.X + mSize.X
-				and mousePos.Y >= mPos.Y and mousePos.Y <= mPos.Y + mSize.Y)
+			local inMenu = (mousePos.X >= mPos.X - 2 and mousePos.X <= mPos.X + mSize.X + 2
+				and mousePos.Y >= mPos.Y - 2 and mousePos.Y <= mPos.Y + mSize.Y + 2)
 			
 			local inTrigger = false
 			if activeDropdownTrigger then
 				local tPos = activeDropdownTrigger.AbsolutePosition
 				local tSize = activeDropdownTrigger.AbsoluteSize
-				inTrigger = (mousePos.X >= tPos.X and mousePos.X <= tPos.X + tSize.X
-					and mousePos.Y >= tPos.Y and mousePos.Y <= tPos.Y + tSize.Y)
+				inTrigger = (mousePos.X >= tPos.X - 2 and mousePos.X <= tPos.X + tSize.X + 2
+					and mousePos.Y >= tPos.Y - 2 and mousePos.Y <= tPos.Y + tSize.Y + 2)
 			end
 
 			-- Only close when clicking outside both the dropdown menu AND the trigger
@@ -2548,6 +2598,14 @@ refreshModules = function()
 end
 
 searchInput:GetPropertyChangedSignal("Text"):Connect(refreshModules)
+
+-- Rebuild module rows whenever the selected accent changes so every accent-bound
+-- element (indicators, sliders, dropdowns, badges, and action controls) updates immediately.
+onAccentChange(function()
+	if refreshModules then
+		refreshModules()
+	end
+end)
 
 --------------------------------------------------------------------------------
 -- CATEGORIES SETUP (1:1 with preview .category-list)
