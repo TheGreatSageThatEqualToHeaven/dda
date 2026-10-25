@@ -1,5 +1,5 @@
 --[[
-    Vape UI Library — Roblox Luau Client Script hehe
+    Vape UI Library — Roblox Luau Client Script
     Faithfully adapted 1:1 from the Lovable Web Preview (index.tsx + styles.css)
     
     Installation:
@@ -3196,7 +3196,7 @@ gridContainer.Parent = homePage
 
 local gridLayout = Instance.new("UIGridLayout")
 gridLayout.CellSize = UDim2.new(0.5, -8, 0, 96)
-gridLayout.CellPadding = Vector2.new(16, 14)
+gridLayout.CellPadding = UDim2.new(0, 16, 0, 14)
 gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 gridLayout.Parent = gridContainer
 
