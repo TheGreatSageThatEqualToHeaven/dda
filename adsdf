@@ -292,7 +292,15 @@ local ICONS = {
 --------------------------------------------------------------------------------
 -- ACCENT-REACTIVE CUSTOM CURSOR
 --------------------------------------------------------------------------------
-local cursorGui = Instance.new("ScreenGui")
+local isInterfaceOpen = false
+local isCurrentlyLoading = false
+local scalerRoot: Frame? = nil
+local customCursorEnabled = true
+local setCustomCursorEnabled: ((boolean) -> ())? = nil
+local syncCustomCursorVisibility: (() -> ())? = nil
+
+local function setupCustomCursor()
+	local cursorGui = Instance.new("ScreenGui")
 cursorGui.Name = "V4CustomCursorGui"
 cursorGui.ResetOnSpawn = false
 cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -404,24 +412,34 @@ updateCursorAccent = function(targetAccent: Color3, duration: number?)
 	end
 end
 
-local function setCustomCursorEnabled(enabled: boolean)
-	customCursorEnabled = enabled
-	if not enabled then
-		cursorRoot.Visible = false
-		UserInputService.MouseIconEnabled = true
-		pcall(function()
-			UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
-		end)
-	else
-		if (isInterfaceOpen and scalerRoot and scalerRoot.Visible) or isCurrentlyLoading then
-			cursorRoot.Visible = true
+	syncCustomCursorVisibility = function()
+		local shouldShow = customCursorEnabled and ((isInterfaceOpen and scalerRoot and scalerRoot.Visible) or isCurrentlyLoading)
+		if shouldShow then
+			if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end
 			UserInputService.MouseIconEnabled = false
 			pcall(function()
 				UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceHide
 			end)
+			cursorRoot.Visible = true
+			local mousePos = UserInputService:GetMouseLocation()
+			cursorRoot.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
+		else
+			cursorRoot.Visible = false
+			if not isInterfaceOpen and not isCurrentlyLoading then
+				UserInputService.MouseIconEnabled = true
+				pcall(function()
+					UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
+				end)
+			end
 		end
 	end
-end
+
+	setCustomCursorEnabled = function(enabled: boolean)
+		customCursorEnabled = enabled
+		syncCustomCursorVisibility()
+	end
 
 -- Cursor mouse movement tracking for immediate zero-latency feedback
 UserInputService.InputChanged:Connect(function(input)
@@ -441,12 +459,14 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 UserInputService.InputEnded:Connect(function(input, processed)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorRoot.Visible then
-		TweenService:Create(cursorScale, TweenInfo.new(0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Scale = 1.0
-		}):Play()
-	end
-end)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorRoot.Visible then
+			TweenService:Create(cursorScale, TweenInfo.new(0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+				Scale = 1.0
+			}):Play()
+		end
+	end)
+end
+setupCustomCursor()
 
 --------------------------------------------------------------------------------
 -- MODULE DATA (1:1 with preview index.tsx)
@@ -1745,7 +1765,7 @@ UserInputService.InputChanged:Connect(function(inp)
 end)
 
 -- Scaler Root: 1180 x 720 base matching preview's width: min(1180px, 94vw); height: min(720px, 86vh)
-local scalerRoot = Instance.new("Frame")
+scalerRoot = Instance.new("Frame")
 scalerRoot.Name = "ScalerRoot"
 scalerRoot.AnchorPoint = Vector2.new(0.5, 0.5)
 scalerRoot.Position = UDim2.fromScale(0.5, 0.5)
@@ -1767,7 +1787,7 @@ modalLock.ZIndex = 0
 modalLock.Modal = false
 modalLock.Parent = scalerRoot
 
-local isInterfaceOpen = false
+isInterfaceOpen = false
 local cursorLoopConn = nil
 local previousMouseBehavior = UserInputService.MouseBehavior
 
@@ -3240,7 +3260,7 @@ local refreshConfigList: () -> ()
 --------------------------------------------------------------------------------
 -- HOME PAGE (Glassy Dashboard with Live Game & Session Stats)
 --------------------------------------------------------------------------------
-do
+local function buildHomePage()
 	homePage = Instance.new("ScrollingFrame")
 	homePage.Name = "HomePage"
 	homePage.Size = UDim2.fromScale(1, 1)
@@ -3679,11 +3699,12 @@ do
 		if fpsConn then fpsConn:Disconnect() end
 	end)
 end -- End of Home Page scope
+buildHomePage()
 
 -- (Friends tab removed)
 
 -- Universal named configuration manager (rebuilt 1:1 to match Modules tab)
-do
+local function buildSettingsPage()
 	settingsPage = Instance.new("Frame")
 settingsPage.Name = "SettingsPage"
 settingsPage.Size = UDim2.fromScale(1, 1)
@@ -4385,6 +4406,7 @@ saveButton.Activated:Connect(function()
 	end
 end)
 end -- End of Settings Page scope
+buildSettingsPage()
 
 local activeTab = "Home"
 local navTabs = {}
@@ -4475,7 +4497,7 @@ switchTab("Home")
 --------------------------------------------------------------------------------
 -- LOADING SCREEN & WINDOW-IN ANIMATION (1:1 with preview .loader-window & @keyframes window-in)
 --------------------------------------------------------------------------------
-local isCurrentlyLoading = false
+isCurrentlyLoading = false
 local currentLoader: Instance? = nil
 
 local function animateWindowIn()
@@ -4792,7 +4814,7 @@ end)
 -- RESIZE DRAGGER (bottom-right corner - matching SimpleUI specification)
 --------------------------------------------------------------------------------
 local resizing = false
-do
+local function setupResizeDragger()
 	local resizeDragger = Instance.new("ImageLabel")
 	resizeDragger.Name = "resize"
 	resizeDragger.Size = UDim2.new(0, 20, 0, 20)
@@ -4868,6 +4890,7 @@ do
 		end
 	end)
 end
+setupResizeDragger()
 
 --------------------------------------------------------------------------------
 -- KEYBOARD SHORTCUT (Right Shift toggle + module hotkeys)
