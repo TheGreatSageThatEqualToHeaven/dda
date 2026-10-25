@@ -14,6 +14,8 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
 local ContextActionService = game:GetService("ContextActionService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local StatsService = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
@@ -129,6 +131,9 @@ local ICONS = {
 	["menu"]              = { url = "rbxassetid://10734887784", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["layers"]            = { url = "rbxassetid://10723424505", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["users"]             = { url = "rbxassetid://10747373426", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["clock"]             = { url = "rbxassetid://10709791176", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["wifi"]              = { url = "rbxassetid://10747382590", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["home"]              = { url = "rbxassetid://10723407389", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["x"]                 = { url = "rbxassetid://10747384394", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 }
 
@@ -1773,7 +1778,7 @@ brandVape.Size = UDim2.fromOffset(120, 36)
 local tabHolder = Instance.new("Frame")
 tabHolder.AnchorPoint = Vector2.new(0, 1)
 tabHolder.Position = UDim2.new(0, 26, 1, 0)
-tabHolder.Size = UDim2.new(0, 380, 0, 50)
+tabHolder.Size = UDim2.new(0, 420, 0, 50)
 tabHolder.BackgroundTransparency = 1
 tabHolder.ZIndex = 5
 tabHolder.Parent = topbar
@@ -2881,6 +2886,576 @@ alternate.ClipsDescendants = true
 alternate.Visible = false
 alternate.Parent = window
 
+-- Forward declaration for switchTab so Home quick buttons can switch tabs
+local switchTab: (string) -> ()
+
+--------------------------------------------------------------------------------
+-- HOME PAGE (Glassy Dashboard with Live Game & Session Stats)
+--------------------------------------------------------------------------------
+local homePage = Instance.new("ScrollingFrame")
+homePage.Name = "HomePage"
+homePage.Size = UDim2.fromScale(1, 1)
+homePage.BackgroundTransparency = 1
+homePage.BorderSizePixel = 0
+homePage.ScrollBarThickness = 4
+homePage.ScrollBarImageColor3 = Color3.fromRGB(120, 122, 130)
+homePage.ScrollBarImageTransparency = 0.5
+homePage.CanvasSize = UDim2.new(0, 0, 0, 0)
+homePage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+homePage.ClipsDescendants = true
+homePage.Visible = false
+homePage.Parent = alternate
+
+local homePadding = Instance.new("UIPadding")
+homePadding.PaddingTop = UDim.new(0, 18)
+homePadding.PaddingBottom = UDim.new(0, 26)
+homePadding.PaddingLeft = UDim.new(0, 24)
+homePadding.PaddingRight = UDim.new(0, 24)
+homePadding.Parent = homePage
+
+local homeLayout = Instance.new("UIListLayout")
+homeLayout.FillDirection = Enum.FillDirection.Vertical
+homeLayout.SortOrder = Enum.SortOrder.LayoutOrder
+homeLayout.Padding = UDim.new(0, 14)
+homeLayout.Parent = homePage
+
+--------------------------------------------------------------------------------
+-- 1. HERO GAME BANNER (Actual Game Thumbnail + Frosted Glass Overlay)
+--------------------------------------------------------------------------------
+local heroCard = Instance.new("Frame")
+heroCard.Name = "HeroGameCard"
+heroCard.LayoutOrder = 1
+heroCard.Size = UDim2.new(1, 0, 0, 180)
+heroCard.BackgroundColor3 = Color3.fromRGB(14, 15, 20)
+heroCard.BackgroundTransparency = 0.15
+heroCard.ClipsDescendants = true
+heroCard.Parent = homePage
+addCorner(heroCard, 12)
+addStroke(heroCard, Color3.fromRGB(255, 255, 255), 1, 0.88)
+
+local placeId = game.PlaceId
+local gameThumb = Instance.new("ImageLabel")
+gameThumb.Name = "GameThumbnail"
+gameThumb.Size = UDim2.fromScale(1, 1)
+gameThumb.BackgroundTransparency = 1
+gameThumb.ScaleType = Enum.ScaleType.Crop
+gameThumb.Image = (placeId and placeId > 0)
+	and ("rbxthumb://type=GameThumbnail&id=" .. tostring(placeId) .. "&w=768&h=432")
+	or "rbxassetid://10723395457"
+gameThumb.Parent = heroCard
+
+local heroOverlay = Instance.new("Frame")
+heroOverlay.Name = "VignetteOverlay"
+heroOverlay.Size = UDim2.fromScale(1, 1)
+heroOverlay.BackgroundColor3 = Color3.fromRGB(10, 11, 15)
+heroOverlay.BackgroundTransparency = 0.28
+heroOverlay.BorderSizePixel = 0
+heroOverlay.Parent = heroCard
+
+local heroGradient = Instance.new("UIGradient")
+heroGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(6, 7, 10)),
+	ColorSequenceKeypoint.new(0.65, Color3.fromRGB(10, 11, 16)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 17, 24)),
+})
+heroGradient.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0.05),
+	NumberSequenceKeypoint.new(0.55, 0.25),
+	NumberSequenceKeypoint.new(1, 0.65),
+})
+heroGradient.Rotation = 35
+heroGradient.Parent = heroOverlay
+
+local heroSheen = Instance.new("Frame")
+heroSheen.Name = "GlassSheen"
+heroSheen.Size = UDim2.new(1, 0, 0, 1)
+heroSheen.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+heroSheen.BackgroundTransparency = 0.85
+heroSheen.BorderSizePixel = 0
+heroSheen.ZIndex = 3
+heroSheen.Parent = heroCard
+
+local heroContent = Instance.new("Frame")
+heroContent.Name = "HeroContent"
+heroContent.Size = UDim2.fromScale(1, 1)
+heroContent.BackgroundTransparency = 1
+heroContent.ZIndex = 4
+heroContent.Parent = heroCard
+
+local heroPad = Instance.new("UIPadding")
+heroPad.PaddingTop = UDim.new(0, 18)
+heroPad.PaddingBottom = UDim.new(0, 18)
+heroPad.PaddingLeft = UDim.new(0, 22)
+heroPad.PaddingRight = UDim.new(0, 22)
+heroPad.Parent = heroContent
+
+local heroLeft = Instance.new("Frame")
+heroLeft.Name = "LeftStack"
+heroLeft.Size = UDim2.new(1, -95, 1, 0)
+heroLeft.BackgroundTransparency = 1
+heroLeft.Parent = heroContent
+
+local heroLeftLayout = Instance.new("UIListLayout")
+heroLeftLayout.FillDirection = Enum.FillDirection.Vertical
+heroLeftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+heroLeftLayout.Padding = UDim.new(0, 8)
+heroLeftLayout.Parent = heroLeft
+
+local liveBadge = Instance.new("Frame")
+liveBadge.Name = "LiveBadge"
+liveBadge.LayoutOrder = 1
+liveBadge.Size = UDim2.fromOffset(160, 24)
+liveBadge.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
+liveBadge.BackgroundTransparency = 0.3
+addCorner(liveBadge, 12)
+addStroke(liveBadge, Color3.fromRGB(255, 255, 255), 1, 0.88)
+liveBadge.Parent = heroLeft
+
+local liveBadgeLayout = Instance.new("UIListLayout")
+liveBadgeLayout.FillDirection = Enum.FillDirection.Horizontal
+liveBadgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+liveBadgeLayout.Padding = UDim.new(0, 7)
+liveBadgeLayout.Parent = liveBadge
+
+local liveBadgePad = Instance.new("UIPadding")
+liveBadgePad.PaddingLeft = UDim.new(0, 8)
+liveBadgePad.Parent = liveBadge
+
+local liveDot = Instance.new("Frame")
+liveDot.Size = UDim2.fromOffset(7, 7)
+liveDot.BackgroundColor3 = Color3.fromRGB(52, 211, 153)
+addCorner(liveDot, 4)
+liveDot.Parent = liveBadge
+
+local liveText = createLabel(liveBadge, "ACTIVE EXPERIENCE", 10, Color3.fromRGB(200, 205, 215), Enum.Font.GothamBold)
+liveText.Size = UDim2.fromOffset(130, 20)
+
+local heroTitle = createLabel(heroLeft, (game.Name and game.Name ~= "") and game.Name or "Roblox Experience", 22, THEME.textPrimary, Enum.Font.GothamBold)
+heroTitle.LayoutOrder = 2
+heroTitle.Size = UDim2.new(1, 0, 0, 28)
+heroTitle.TextTruncate = Enum.TextTruncate.AtEnd
+
+local heroMeta = Instance.new("Frame")
+heroMeta.Name = "MetaRow"
+heroMeta.LayoutOrder = 3
+heroMeta.Size = UDim2.new(1, 0, 0, 22)
+heroMeta.BackgroundTransparency = 1
+heroMeta.Parent = heroLeft
+
+local heroMetaLayout = Instance.new("UIListLayout")
+heroMetaLayout.FillDirection = Enum.FillDirection.Horizontal
+heroMetaLayout.Padding = UDim.new(0, 8)
+heroMetaLayout.Parent = heroMeta
+
+local function createMetaPill(parent: Instance, txt: string)
+	local p = Instance.new("Frame")
+	p.Size = UDim2.fromOffset(0, 22)
+	p.AutomaticSize = Enum.AutomaticSize.X
+	p.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+	p.BackgroundTransparency = 0.4
+	addCorner(p, 6)
+	addStroke(p, Color3.fromRGB(255, 255, 255), 1, 0.90)
+	p.Parent = parent
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 8)
+	pad.PaddingRight = UDim.new(0, 8)
+	pad.Parent = p
+
+	local lbl = createLabel(p, txt, 11, THEME.textMuted, Enum.Font.GothamMedium)
+	lbl.Size = UDim2.fromOffset(0, 22)
+	lbl.AutomaticSize = Enum.AutomaticSize.X
+	return p, lbl
+end
+
+createMetaPill(heroMeta, "Place: " .. tostring(placeId or 0))
+createMetaPill(heroMeta, "Job: " .. ((game.JobId and game.JobId ~= "") and (game.JobId:sub(1, 8) .. "...") or "Local Server"))
+local _, heroCreatorLbl = createMetaPill(heroMeta, "Roblox Experience")
+
+local iconBadge = Instance.new("Frame")
+iconBadge.Name = "IconBadge"
+iconBadge.AnchorPoint = Vector2.new(1, 0.5)
+iconBadge.Position = UDim2.new(1, 0, 0.5, 0)
+iconBadge.Size = UDim2.fromOffset(80, 80)
+iconBadge.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+iconBadge.BackgroundTransparency = 0.25
+iconBadge.ClipsDescendants = true
+addCorner(iconBadge, 12)
+addStroke(iconBadge, Color3.fromRGB(255, 255, 255), 1, 0.85)
+iconBadge.Parent = heroContent
+
+local iconImg = Instance.new("ImageLabel")
+iconImg.Size = UDim2.fromScale(1, 1)
+iconImg.BackgroundTransparency = 1
+iconImg.Image = (placeId and placeId > 0)
+	and ("rbxthumb://type=GameIcon&id=" .. tostring(placeId) .. "&w=150&h=150")
+	or "rbxassetid://10723395457"
+iconImg.Parent = iconBadge
+addCorner(iconImg, 12)
+
+task.spawn(function()
+	if placeId and placeId > 0 then
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(placeId)
+		end)
+		if ok and type(info) == "table" then
+			if info.Name and info.Name ~= "" then
+				heroTitle.Text = info.Name
+			end
+			if info.Creator and info.Creator.Name then
+				heroCreatorLbl.Text = "By " .. info.Creator.Name
+			end
+		end
+	end
+end)
+
+--------------------------------------------------------------------------------
+-- 2. USER WELCOME STRIP
+--------------------------------------------------------------------------------
+local userStrip = Instance.new("Frame")
+userStrip.Name = "UserWelcomeStrip"
+userStrip.LayoutOrder = 2
+userStrip.Size = UDim2.new(1, 0, 0, 56)
+userStrip.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+userStrip.BackgroundTransparency = 0.35
+addCorner(userStrip, 10)
+addStroke(userStrip, Color3.fromRGB(255, 255, 255), 1, 0.90)
+userStrip.Parent = homePage
+
+local userPad = Instance.new("UIPadding")
+userPad.PaddingLeft = UDim.new(0, 14)
+userPad.PaddingRight = UDim.new(0, 16)
+userPad.Parent = userStrip
+
+local userLayout = Instance.new("UIListLayout")
+userLayout.FillDirection = Enum.FillDirection.Horizontal
+userLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+userLayout.Padding = UDim.new(0, 12)
+userLayout.Parent = userStrip
+
+local avatar = Instance.new("ImageLabel")
+avatar.Size = UDim2.fromOffset(38, 38)
+avatar.BackgroundTransparency = 1
+avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(player.UserId) .. "&w=150&h=150"
+addCorner(avatar, 19)
+addStroke(avatar, THEME.border, 1, 0.5)
+avatar.Parent = userStrip
+
+local userTextFrame = Instance.new("Frame")
+userTextFrame.Size = UDim2.new(1, -220, 1, 0)
+userTextFrame.BackgroundTransparency = 1
+userTextFrame.Parent = userStrip
+
+local uName = createLabel(userTextFrame, "Welcome back, " .. player.DisplayName, 14, THEME.textPrimary, Enum.Font.GothamBold)
+uName.Position = UDim2.fromOffset(0, 10)
+uName.Size = UDim2.new(1, 0, 0, 18)
+
+local uHandle = createLabel(userTextFrame, "@" .. player.Name .. " • Client Session Active", 11, THEME.textMuted, Enum.Font.Gotham)
+uHandle.Position = UDim2.fromOffset(0, 29)
+uHandle.Size = UDim2.new(1, 0, 0, 16)
+
+local userEnginePill = Instance.new("Frame")
+userEnginePill.Size = UDim2.fromOffset(130, 26)
+userEnginePill.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+userEnginePill.BackgroundTransparency = 0.3
+addCorner(userEnginePill, 6)
+addStroke(userEnginePill, Color3.fromRGB(255, 255, 255), 1, 0.90)
+userEnginePill.Parent = userStrip
+
+local pillLayout = Instance.new("UIListLayout")
+pillLayout.FillDirection = Enum.FillDirection.Horizontal
+pillLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+pillLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+pillLayout.Padding = UDim.new(0, 6)
+pillLayout.Parent = userEnginePill
+
+local pillDot = Instance.new("Frame")
+pillDot.Size = UDim2.fromOffset(6, 6)
+pillDot.BackgroundColor3 = THEME.accent
+addCorner(pillDot, 3)
+pillDot.Parent = userEnginePill
+
+local pillLbl = createLabel(userEnginePill, "VAPE ENGINE", 10, THEME.textSecondary, Enum.Font.GothamBold)
+pillLbl.Size = UDim2.fromOffset(80, 16)
+
+--------------------------------------------------------------------------------
+-- 3. GLASS METRIC STATS GRID (6 Interactive Cards)
+--------------------------------------------------------------------------------
+local gridContainer = Instance.new("Frame")
+gridContainer.Name = "MetricsGrid"
+gridContainer.LayoutOrder = 3
+gridContainer.Size = UDim2.new(1, 0, 0, 0)
+gridContainer.AutomaticSize = Enum.AutomaticSize.Y
+gridContainer.BackgroundTransparency = 1
+gridContainer.Parent = homePage
+
+local gridLayout = Instance.new("UIGridLayout")
+gridLayout.CellSize = UDim2.new(0.5, -8, 0, 96)
+gridLayout.CellPadding = Vector2.new(16, 14)
+gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+gridLayout.Parent = gridContainer
+
+local function createGlassMetricCard(title: string, iconName: string, initialVal: string, initialSub: string, order: number)
+	local card = Instance.new("Frame")
+	card.Name = "MetricCard_" .. title
+	card.LayoutOrder = order
+	card.BackgroundColor3 = Color3.fromRGB(18, 20, 27)
+	card.BackgroundTransparency = 0.35
+	addCorner(card, 10)
+	local stroke = addStroke(card, Color3.fromRGB(255, 255, 255), 1, 0.90)
+	card.Parent = gridContainer
+
+	local sheen = Instance.new("Frame")
+	sheen.Size = UDim2.new(1, 0, 0, 1)
+	sheen.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	sheen.BackgroundTransparency = 0.92
+	sheen.BorderSizePixel = 0
+	sheen.Parent = card
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 12)
+	pad.PaddingBottom = UDim.new(0, 12)
+	pad.PaddingLeft = UDim.new(0, 16)
+	pad.PaddingRight = UDim.new(0, 16)
+	pad.Parent = card
+
+	local header = Instance.new("Frame")
+	header.Position = UDim2.fromOffset(0, 0)
+	header.Size = UDim2.new(1, 0, 0, 18)
+	header.BackgroundTransparency = 1
+	header.Parent = card
+
+	local hLayout = Instance.new("UIListLayout")
+	hLayout.FillDirection = Enum.FillDirection.Horizontal
+	hLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	hLayout.Padding = UDim.new(0, 8)
+	hLayout.Parent = header
+
+	createIcon(header, iconName, 15, THEME.textSecondary)
+
+	local titleLbl = createLabel(header, title, 11, THEME.textMuted, Enum.Font.GothamBold)
+	titleLbl.Size = UDim2.new(1, -30, 1, 0)
+
+	local valLbl = createLabel(card, initialVal, 22, THEME.textPrimary, Enum.Font.GothamBold)
+	valLbl.Position = UDim2.fromOffset(0, 26)
+	valLbl.Size = UDim2.new(1, 0, 0, 26)
+
+	local subLbl = createLabel(card, initialSub, 11, THEME.textMuted, Enum.Font.Gotham)
+	subLbl.Position = UDim2.fromOffset(0, 54)
+	subLbl.Size = UDim2.new(1, 0, 0, 16)
+
+	card.MouseEnter:Connect(function()
+		TweenService:Create(card, TweenInfo.new(0.2), {
+			BackgroundColor3 = Color3.fromRGB(22, 25, 34),
+			BackgroundTransparency = 0.25,
+		}):Play()
+		stroke.Transparency = 0.70
+	end)
+	card.MouseLeave:Connect(function()
+		TweenService:Create(card, TweenInfo.new(0.2), {
+			BackgroundColor3 = Color3.fromRGB(18, 20, 27),
+			BackgroundTransparency = 0.35,
+		}):Play()
+		stroke.Transparency = 0.90
+	end)
+
+	return valLbl, subLbl, stroke
+end
+
+local clockVal, dateSub = createGlassMetricCard("REAL TIME & DATE", "clock", os.date("%I:%M:%S %p"), os.date("%A, %b %d, %Y"), 1)
+local uptimeVal, uptimeSub = createGlassMetricCard("SCRIPT RUNTIME", "refresh-cw", "00:00:00", "Elapsed session uptime", 2)
+local activeVal, activeSub = createGlassMetricCard("ACTIVE FEATURES", "sparkles", "0 Active", "0 modules enabled", 3)
+local playersVal, playersSub = createGlassMetricCard("SERVER PLAYERS", "users", tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers), "Connected in current server", 4)
+local fpsVal, fpsSub = createGlassMetricCard("CLIENT FRAMERATE", "circle-gauge", "60 FPS", "Render framerate", 5)
+local pingVal, pingSub = createGlassMetricCard("NETWORK PING", "wifi", "0 ms", "Round-trip latency", 6)
+
+activeVal.TextColor3 = THEME.accent
+onAccentChange(function(newAccent)
+	activeVal.TextColor3 = newAccent
+	pillDot.BackgroundColor3 = newAccent
+end)
+
+--------------------------------------------------------------------------------
+-- 4. QUICK ACCESS ACTION BAR
+--------------------------------------------------------------------------------
+local navStrip = Instance.new("Frame")
+navStrip.Name = "QuickNavStrip"
+navStrip.LayoutOrder = 4
+navStrip.Size = UDim2.new(1, 0, 0, 52)
+navStrip.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+navStrip.BackgroundTransparency = 0.4
+addCorner(navStrip, 10)
+addStroke(navStrip, Color3.fromRGB(255, 255, 255), 1, 0.90)
+navStrip.Parent = homePage
+
+local navPad = Instance.new("UIPadding")
+navPad.PaddingLeft = UDim.new(0, 16)
+navPad.PaddingRight = UDim.new(0, 16)
+navPad.Parent = navStrip
+
+local navLayout = Instance.new("UIListLayout")
+navLayout.FillDirection = Enum.FillDirection.Horizontal
+navLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+navLayout.Padding = UDim.new(0, 12)
+navLayout.Parent = navStrip
+
+local navLabel = createLabel(navStrip, "QUICK ACCESS", 11, THEME.textMuted, Enum.Font.GothamBold)
+navLabel.Size = UDim2.fromOffset(100, 20)
+
+local function createGlassNavButton(text: string, iconName: string, targetTab: string)
+	local btn = Instance.new("TextButton")
+	btn.Name = "NavBtn_" .. targetTab
+	btn.AutoButtonColor = false
+	btn.Size = UDim2.fromOffset(165, 34)
+	btn.BackgroundColor3 = Color3.fromRGB(26, 28, 38)
+	btn.BackgroundTransparency = 0.3
+	btn.Text = ""
+	addCorner(btn, 8)
+	local s = addStroke(btn, Color3.fromRGB(255, 255, 255), 1, 0.88)
+	btn.Parent = navStrip
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
+	pad.Parent = btn
+
+	local bLayout = Instance.new("UIListLayout")
+	bLayout.FillDirection = Enum.FillDirection.Horizontal
+	bLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	bLayout.Padding = UDim.new(0, 8)
+	bLayout.Parent = btn
+
+	local ico = createIcon(btn, iconName, 15, THEME.textSecondary)
+	local lbl = createLabel(btn, text, 12, THEME.textPrimary, Enum.Font.GothamMedium)
+	lbl.Size = UDim2.new(1, -24, 1, 0)
+
+	btn.MouseEnter:Connect(function()
+		TweenService:Create(btn, TweenInfo.new(0.2), {
+			BackgroundColor3 = THEME.accent,
+			BackgroundTransparency = 0.1,
+		}):Play()
+		s.Transparency = 0.6
+		lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+		ico.ImageColor3 = Color3.fromRGB(255, 255, 255)
+	end)
+	btn.MouseLeave:Connect(function()
+		TweenService:Create(btn, TweenInfo.new(0.2), {
+			BackgroundColor3 = Color3.fromRGB(26, 28, 38),
+			BackgroundTransparency = 0.3,
+		}):Play()
+		s.Transparency = 0.88
+		lbl.TextColor3 = THEME.textPrimary
+		ico.ImageColor3 = THEME.textSecondary
+	end)
+
+	btn.Activated:Connect(function()
+		if switchTab then
+			switchTab(targetTab)
+		end
+	end)
+end
+
+createGlassNavButton("Browse Modules", "layers", "Modules")
+createGlassNavButton("Settings & Profiles", "settings", "Settings")
+
+--------------------------------------------------------------------------------
+-- HOME METRICS UPDATE LOOP
+--------------------------------------------------------------------------------
+local scriptStartTime = os.clock()
+local frameCount = 0
+local lastFpsUpdate = os.clock()
+local liveFps = 60
+
+local function updateHomeStats()
+	if not homePage.Visible then return end
+
+	-- Real time & current date
+	clockVal.Text = os.date("%I:%M:%S %p")
+	dateSub.Text = os.date("%A, %b %d, %Y")
+
+	-- Script runtime
+	local elapsed = math.max(0, math.floor(os.clock() - scriptStartTime))
+	local h = math.floor(elapsed / 3600)
+	local m = math.floor((elapsed % 3600) / 60)
+	local s = elapsed % 60
+	uptimeVal.Text = string.format("%02d:%02d:%02d", h, m, s)
+
+	-- Active features count
+	local activeCount = 0
+	local totalToggles = 0
+	for _, mod in ipairs(modules) do
+		if (mod.kind or "toggle") == "toggle" then
+			totalToggles = totalToggles + 1
+			if enabledState[mod.name] == true then
+				activeCount = activeCount + 1
+			end
+		end
+	end
+	activeVal.Text = tostring(activeCount) .. " Active"
+	activeSub.Text = string.format("%d of %d modules enabled", activeCount, totalToggles)
+
+	-- Players in server
+	local curPlayers = #Players:GetPlayers()
+	local maxPlayers = Players.MaxPlayers
+	playersVal.Text = string.format("%d / %s", curPlayers, maxPlayers > 0 and tostring(maxPlayers) or "∞")
+
+	-- FPS with dynamic status color
+	fpsVal.Text = string.format("%d FPS", liveFps)
+	if liveFps >= 50 then
+		fpsVal.TextColor3 = Color3.fromRGB(74, 222, 128)
+	elseif liveFps >= 30 then
+		fpsVal.TextColor3 = Color3.fromRGB(250, 204, 21)
+	else
+		fpsVal.TextColor3 = Color3.fromRGB(248, 113, 113)
+	end
+
+	-- Ping with dynamic status color
+	local pingMs = 0
+	local ok, v = pcall(function()
+		return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+	end)
+	if ok and type(v) == "number" and v > 0 then
+		pingMs = math.round(v)
+	else
+		local ok2, v2 = pcall(function()
+			return player:GetNetworkPing() * 1000
+		end)
+		if ok2 and type(v2) == "number" and v2 > 0 then
+			pingMs = math.round(v2)
+		end
+	end
+	pingVal.Text = string.format("%d ms", pingMs)
+	if pingMs <= 70 then
+		pingVal.TextColor3 = Color3.fromRGB(74, 222, 128)
+	elseif pingMs <= 140 then
+		pingVal.TextColor3 = Color3.fromRGB(250, 204, 21)
+	else
+		pingVal.TextColor3 = Color3.fromRGB(248, 113, 113)
+	end
+end
+
+local fpsConn = RunService.RenderStepped:Connect(function()
+	frameCount = frameCount + 1
+	local now = os.clock()
+	if now - lastFpsUpdate >= 0.5 then
+		liveFps = math.round(frameCount / (now - lastFpsUpdate))
+		frameCount = 0
+		lastFpsUpdate = now
+	end
+end)
+
+task.spawn(function()
+	while gui and gui.Parent do
+		if homePage and homePage.Visible then
+			pcall(updateHomeStats)
+		end
+		task.wait(0.5)
+	end
+	if fpsConn then
+		fpsConn:Disconnect()
+	end
+end)
+
 -- (Friends tab removed)
 
 -- Universal named configuration manager (rebuilt 1:1 to match Modules tab)
@@ -3579,10 +4154,10 @@ saveButton.Activated:Connect(function()
 	end
 end)
 
-local activeTab = "Modules"
+local activeTab = "Home"
 local navTabs = {}
 
-local function switchTab(tabName: string)
+switchTab = function(tabName: string)
 	activeTab = tabName
 	if drawer.Visible then closeDrawer() end
 
@@ -3594,16 +4169,20 @@ local function switchTab(tabName: string)
 
 	workspaceFrame.Visible = (tabName == "Modules")
 	alternate.Visible = (tabName ~= "Modules")
-	settingsPage.Visible = (tabName == "Settings")
+	if homePage then homePage.Visible = (tabName == "Home") end
+	if settingsPage then settingsPage.Visible = (tabName == "Settings") end
 
 	if tabName == "Settings" then
 		refreshConfigList()
+	elseif tabName == "Home" then
+		pcall(updateHomeStats)
 	end
 end
-for _, tName in ipairs({ "Modules", "Settings" }) do
+
+for _, tName in ipairs({ "Home", "Modules", "Settings" }) do
 	local holder = Instance.new("Frame")
 	holder.Name = "TabHolder_" .. tName
-	holder.Size = UDim2.new(0, tName == "Modules" and 80 or (tName == "Settings" and 78 or 72), 1, 0)
+	holder.Size = UDim2.new(0, tName == "Home" and 68 or (tName == "Modules" and 80 or 78), 1, 0)
 	holder.BackgroundTransparency = 1
 	holder.ZIndex = 10
 	holder.Parent = tabHolder
@@ -3616,7 +4195,7 @@ for _, tName in ipairs({ "Modules", "Settings" }) do
 	b.Text = tName
 	b.TextSize = 15
 	b.Font = Enum.Font.GothamMedium
-	b.TextColor3 = (tName == "Modules") and THEME.textPrimary or THEME.textMuted
+	b.TextColor3 = (tName == "Home") and THEME.textPrimary or THEME.textMuted
 	b.TextXAlignment = Enum.TextXAlignment.Center
 	b.ZIndex = 11
 	b.Parent = holder
@@ -3630,7 +4209,7 @@ for _, tName in ipairs({ "Modules", "Settings" }) do
 	line.BackgroundColor3 = THEME.primary
 	line.BorderSizePixel = 0
 	line.ZIndex = 12
-	line.Visible = (tName == "Modules")
+	line.Visible = (tName == "Home")
 	line.Parent = holder
 	addCorner(line, 2)
 
@@ -3651,6 +4230,9 @@ for _, tName in ipairs({ "Modules", "Settings" }) do
 		end
 	end)
 end
+
+-- Initialize starting tab view on Home
+switchTab("Home")
 
 
 --------------------------------------------------------------------------------
