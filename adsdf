@@ -2888,11 +2888,16 @@ alternate.Parent = window
 
 -- Forward declaration for switchTab so Home quick buttons can switch tabs
 local switchTab: (string) -> ()
+local homePage: any
+local updateHomeStats: () -> ()
+local settingsPage: any
+local refreshConfigList: () -> ()
 
 --------------------------------------------------------------------------------
 -- HOME PAGE (Glassy Dashboard with Live Game & Session Stats)
 --------------------------------------------------------------------------------
-local homePage = Instance.new("ScrollingFrame")
+do
+	homePage = Instance.new("ScrollingFrame")
 homePage.Name = "HomePage"
 homePage.Size = UDim2.fromScale(1, 1)
 homePage.BackgroundTransparency = 1
@@ -3366,7 +3371,7 @@ local frameCount = 0
 local lastFpsUpdate = os.clock()
 local liveFps = 60
 
-local function updateHomeStats()
+	updateHomeStats = function()
 	if not homePage.Visible then return end
 
 	-- Real time & current date
@@ -3455,11 +3460,13 @@ task.spawn(function()
 		fpsConn:Disconnect()
 	end
 end)
+end -- End of Home Page scope
 
 -- (Friends tab removed)
 
 -- Universal named configuration manager (rebuilt 1:1 to match Modules tab)
-local settingsPage = Instance.new("Frame")
+do
+	settingsPage = Instance.new("Frame")
 settingsPage.Name = "SettingsPage"
 settingsPage.Size = UDim2.fromScale(1, 1)
 settingsPage.BackgroundTransparency = 1
@@ -3738,7 +3745,7 @@ configListLayout.Parent = configList
 
 local activeConfigName: string? = nil
 local selectedSettingsCategory = "Profiles"
-local refreshConfigList: () -> ()
+	-- refreshConfigList is forward declared above
 
 -- Settings Categories Definition
 local settingsCategories = {
@@ -4153,6 +4160,7 @@ saveButton.Activated:Connect(function()
 		refreshConfigList()
 	end
 end)
+end -- End of Settings Page scope
 
 local activeTab = "Home"
 local navTabs = {}
