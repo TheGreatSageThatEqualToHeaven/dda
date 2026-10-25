@@ -41,13 +41,13 @@ local targetGuiParent = getTargetGuiParent()
 -- Clean up any existing instance across possible parents
 local existing = targetGuiParent:FindFirstChild("V4InterfaceGui")
 if existing then existing:Destroy() end
-local existingCursor = targetGuiParent:FindFirstChild("V4CustomCursorGui")
+local existingCursor = targetGuiParent:FindFirstChild("VapeCustomCursorGui")
 if existingCursor then existingCursor:Destroy() end
 pcall(function()
 	local pGui = player:FindFirstChild("PlayerGui")
 	if pGui then
 		if pGui:FindFirstChild("V4InterfaceGui") then pGui.V4InterfaceGui:Destroy() end
-		if pGui:FindFirstChild("V4CustomCursorGui") then pGui.V4CustomCursorGui:Destroy() end
+		if pGui:FindFirstChild("VapeCustomCursorGui") then pGui.VapeCustomCursorGui:Destroy() end
 	end
 end)
 
@@ -98,25 +98,17 @@ local function onAccentChange(fn: (Color3) -> ())
 	pcall(fn, THEME.warmAmber)
 end
 
-local activeSelectedAccent = ACCENT
-local updateCursorAccent: ((Color3, number?) -> ())? = nil
-
-local function sameColor(a: Color3, b: Color3, tolerance: number?): boolean
-	if not a or not b then return false end
-	local tol = tolerance or 4
-	return math.abs(math.round(a.R * 255) - math.round(b.R * 255)) <= tol
-		and math.abs(math.round(a.G * 255) - math.round(b.G * 255)) <= tol
-		and math.abs(math.round(a.B * 255) - math.round(b.B * 255)) <= tol
+local function sameColor(a: Color3, b: Color3): boolean
+	return math.round(a.R * 255) == math.round(b.R * 255)
+		and math.round(a.G * 255) == math.round(b.G * 255)
+		and math.round(a.B * 255) == math.round(b.B * 255)
 end
 
 local ACCENT_PROPS = { "BackgroundColor3", "TextColor3", "ImageColor3", "PlaceholderColor3", "ScrollBarImageColor3", "TextStrokeColor3" }
 
--- Walks the whole interface and smoothly transitions any color matching the previous accent
--- (or its hover tint) to the new one with fluid easing.
-local function repaintAccent(oldAccent: Color3, newAccent: Color3, oldHover: Color3, newHover: Color3, oldKnob: Color3, newKnob: Color3, duration: number?)
-	local dur = duration or 0.35
-	local tweenInfo = dur > 0 and TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) or nil
-
+-- Walks the whole interface and swaps any color that matched the previous accent
+-- (or its hover tint) for the new one, so nothing is left in the old color.
+local function repaintAccent(oldAccent: Color3, newAccent: Color3, oldHover: Color3, newHover: Color3, oldKnob: Color3, newKnob: Color3)
 	for _, obj in ipairs(gui:GetDescendants()) do
 		-- Theme swatches always show their own color and are never repainted.
 		local fixed = obj:GetAttribute("FixedColor") == true
@@ -124,58 +116,21 @@ local function repaintAccent(oldAccent: Color3, newAccent: Color3, oldHover: Col
 		if fixed then
 			continue
 		elseif obj:IsA("UIStroke") then
-			local role = obj:GetAttribute("AccentRole")
-			if sameColor(obj.Color, oldAccent) or role == "primary" then
-				obj:SetAttribute("AccentRole", "primary")
-				if tweenInfo then
-					TweenService:Create(obj, tweenInfo, { Color = newAccent }):Play()
-				else
-					obj.Color = newAccent
-				end
-			elseif sameColor(obj.Color, oldHover) or role == "hover" then
-				obj:SetAttribute("AccentRole", "hover")
-				if tweenInfo then
-					TweenService:Create(obj, tweenInfo, { Color = newHover }):Play()
-				else
-					obj.Color = newHover
-				end
-			end
+			if sameColor(obj.Color, oldAccent) then obj.Color = newAccent
+			elseif sameColor(obj.Color, oldHover) then obj.Color = newHover end
 		elseif obj:IsA("GuiObject") then
 			if obj.Name == "Knob" and obj.Parent and obj.Parent.Name == "ToggleTrack" then
-				if (sameColor(obj.BackgroundColor3, oldKnob) or obj:GetAttribute("AccentRole") == "knob")
-					and obj.Parent.BackgroundColor3
-					and (sameColor(obj.Parent.BackgroundColor3, oldAccent) or obj.Parent:GetAttribute("AccentProp_BackgroundColor3") == "primary") then
-					obj:SetAttribute("AccentRole", "knob")
-					if tweenInfo then
-						TweenService:Create(obj, tweenInfo, { BackgroundColor3 = newKnob }):Play()
-					else
-						obj.BackgroundColor3 = newKnob
-					end
+				if sameColor(obj.BackgroundColor3, oldKnob) and obj.Parent.BackgroundColor3 and sameColor(obj.Parent.BackgroundColor3, oldAccent) then
+					obj.BackgroundColor3 = newKnob
 				end
 			end
 			for _, prop in ipairs(ACCENT_PROPS) do
 				local ok, value = pcall(function() return (obj :: any)[prop] end)
 				if ok and typeof(value) == "Color3" then
-					local attrName = "AccentProp_" .. prop
-					local role = obj:GetAttribute(attrName)
-					if sameColor(value, oldAccent) or role == "primary" then
-						obj:SetAttribute(attrName, "primary")
-						if tweenInfo then
-							pcall(function()
-								TweenService:Create(obj, tweenInfo, { [prop] = newAccent }):Play()
-							end)
-						else
-							pcall(function() (obj :: any)[prop] = newAccent end)
-						end
-					elseif sameColor(value, oldHover) or role == "hover" then
-						obj:SetAttribute(attrName, "hover")
-						if tweenInfo then
-							pcall(function()
-								TweenService:Create(obj, tweenInfo, { [prop] = newHover }):Play()
-							end)
-						else
-							pcall(function() (obj :: any)[prop] = newHover end)
-						end
+					if sameColor(value, oldAccent) then
+						pcall(function() (obj :: any)[prop] = newAccent end)
+					elseif sameColor(value, oldHover) then
+						pcall(function() (obj :: any)[prop] = newHover end)
 					end
 				end
 			end
@@ -183,70 +138,99 @@ local function repaintAccent(oldAccent: Color3, newAccent: Color3, oldHover: Col
 	end
 end
 
-local accentTweenGeneration = 0
-local function setAccentColor(newColor: Color3, customDuration: number?)
-	local duration = customDuration or 0.35
-	local oldAccent = THEME.primary
-	if sameColor(oldAccent, newColor, 1) then return end
+-- Dynamic accent color transition manager with smooth fading support
+local activeAccentFadeThread = nil
+local currentFadeAccentColor = ACCENT
+local cursorSetAccentColor: ((Color3) -> ())? = nil
 
-	activeSelectedAccent = newColor
-
-	local oldHover = THEME.accentHover
-	local oldKnob = THEME.toggleOnKnob
-
-	local lum = 0.299 * newColor.R + 0.587 * newColor.G + 0.114 * newColor.B
-	local targetKnob = lum > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)
-	local targetHover = newColor:Lerp(Color3.fromRGB(255, 255, 255), 0.18)
-
-	-- 1. Smoothly fade the custom cursor to the new accent color
-	if updateCursorAccent then
-		updateCursorAccent(newColor, duration)
+local function setAccentColor(newColor: Color3, smoothFade: boolean?)
+	-- Cancel any running accent color fade transition
+	if activeAccentFadeThread then
+		task.cancel(activeAccentFadeThread)
+		activeAccentFadeThread = nil
 	end
 
-	-- 2. Smoothly tween all accent-bound UI elements across the interface
-	repaintAccent(oldAccent, newColor, oldHover, targetHover, oldKnob, targetKnob, duration)
+	local startAccent = THEME.primary or ACCENT
+	local targetAccent = newColor
+	local fadeDuration = (smoothFade ~= false) and 0.35 or 0.0
 
-	-- 3. Interpolate THEME tokens over the duration so active reads transition smoothly
-	accentTweenGeneration += 1
-	local myGen = accentTweenGeneration
+	if fadeDuration <= 0 then
+		local oldAccent = THEME.primary
+		local oldHover = THEME.accentHover
+		local oldKnob = THEME.toggleOnKnob
+		THEME.warmAmber = targetAccent
+		THEME.brandTeal = targetAccent
+		THEME.primary = targetAccent
+		THEME.toggleOnTrack = targetAccent
+		THEME.accentHover = targetAccent:Lerp(Color3.fromRGB(255, 255, 255), 0.18)
+		local lum = 0.299 * targetAccent.R + 0.587 * targetAccent.G + 0.114 * targetAccent.B
+		THEME.toggleOnKnob = lum > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)
+		currentFadeAccentColor = targetAccent
+		repaintAccent(oldAccent, targetAccent, oldHover, THEME.accentHover, oldKnob, THEME.toggleOnKnob)
+		if cursorSetAccentColor then
+			pcall(cursorSetAccentColor, targetAccent)
+		end
+		for _, fn in ipairs(accentListeners) do
+			pcall(fn, targetAccent)
+		end
+		task.delay(0.35, function()
+			repaintAccent(oldAccent, targetAccent, oldHover, THEME.accentHover, oldKnob, THEME.toggleOnKnob)
+		end)
+		return
+	end
 
-	task.spawn(function()
+	-- Smoothly fade into the new accent color over time
+	activeAccentFadeThread = task.spawn(function()
 		local startTime = os.clock()
+		local prevStepColor = startAccent
+
 		while true do
 			local elapsed = os.clock() - startTime
-			local t = math.clamp(elapsed / duration, 0, 1)
-			-- Smooth quad easing: t * (2 - t)
-			local eased = t * (2 - t)
+			local alpha = math.clamp(elapsed / fadeDuration, 0, 1)
+			-- Smooth cubic ease-out
+			local easeAlpha = 1 - math.pow(1 - alpha, 3)
+			local stepColor = startAccent:Lerp(targetAccent, easeAlpha)
 
-			local curAccent = oldAccent:Lerp(newColor, eased)
-			THEME.warmAmber = curAccent
-			THEME.brandTeal = curAccent
-			THEME.primary = curAccent
-			THEME.toggleOnTrack = curAccent
-			THEME.accentHover = curAccent:Lerp(Color3.fromRGB(255, 255, 255), 0.18)
-			THEME.toggleOnKnob = oldKnob:Lerp(targetKnob, eased)
+			local oldHover = THEME.accentHover
+			local oldKnob = THEME.toggleOnKnob
+			THEME.warmAmber = stepColor
+			THEME.brandTeal = stepColor
+			THEME.primary = stepColor
+			THEME.toggleOnTrack = stepColor
+			THEME.accentHover = stepColor:Lerp(Color3.fromRGB(255, 255, 255), 0.18)
+			local lum = 0.299 * stepColor.R + 0.587 * stepColor.G + 0.114 * stepColor.B
+			THEME.toggleOnKnob = lum > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)
+			currentFadeAccentColor = stepColor
 
-			if t >= 1 or accentTweenGeneration ~= myGen then
+			repaintAccent(prevStepColor, stepColor, oldHover, THEME.accentHover, oldKnob, THEME.toggleOnKnob)
+			if cursorSetAccentColor then
+				pcall(cursorSetAccentColor, stepColor)
+			end
+			for _, fn in ipairs(accentListeners) do
+				pcall(fn, stepColor)
+			end
+
+			prevStepColor = stepColor
+
+			if alpha >= 1 then
 				break
 			end
-			RunService.Heartbeat:Wait()
+			RunService.RenderStepped:Wait()
 		end
 
-		if accentTweenGeneration == myGen then
-			THEME.warmAmber = newColor
-			THEME.brandTeal = newColor
-			THEME.primary = newColor
-			THEME.toggleOnTrack = newColor
-			THEME.accentHover = targetHover
-			THEME.toggleOnKnob = targetKnob
-
-			for _, fn in ipairs(accentListeners) do
-				pcall(fn, newColor)
-			end
-
-			-- Final pass to ensure all elements are locked in
-			repaintAccent(oldAccent, newColor, oldHover, targetHover, oldKnob, targetKnob, 0)
+		-- Final clean repaint pass to ensure exact target color parity
+		repaintAccent(prevStepColor, targetAccent, THEME.accentHover, targetAccent:Lerp(Color3.fromRGB(255, 255, 255), 0.18), THEME.toggleOnKnob, (0.299 * targetAccent.R + 0.587 * targetAccent.G + 0.114 * targetAccent.B > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)))
+		if cursorSetAccentColor then
+			pcall(cursorSetAccentColor, targetAccent)
 		end
+		for _, fn in ipairs(accentListeners) do
+			pcall(fn, targetAccent)
+		end
+
+		task.delay(0.35, function()
+			repaintAccent(startAccent, targetAccent, THEME.accentHover, targetAccent:Lerp(Color3.fromRGB(255, 255, 255), 0.18), THEME.toggleOnKnob, (0.299 * targetAccent.R + 0.587 * targetAccent.G + 0.114 * targetAccent.B > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)))
+		end)
+		activeAccentFadeThread = nil
 	end)
 end
 
@@ -288,185 +272,6 @@ local ICONS = {
 	["home"]              = { url = "rbxassetid://10723407389", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["x"]                 = { url = "rbxassetid://10747384394", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 }
-
---------------------------------------------------------------------------------
--- ACCENT-REACTIVE CUSTOM CURSOR
---------------------------------------------------------------------------------
-local isInterfaceOpen = false
-local isCurrentlyLoading = false
-local scalerRoot: Frame? = nil
-local customCursorEnabled = true
-local setCustomCursorEnabled: ((boolean) -> ())? = nil
-local syncCustomCursorVisibility: (() -> ())? = nil
-
-local function setupCustomCursor()
-	local cursorGui = Instance.new("ScreenGui")
-cursorGui.Name = "V4CustomCursorGui"
-cursorGui.ResetOnSpawn = false
-cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-cursorGui.DisplayOrder = 2147483647
-cursorGui.IgnoreGuiInset = true
-cursorGui.Parent = targetGuiParent
-
-local cursorRoot = Instance.new("Frame")
-cursorRoot.Name = "CursorRoot"
-cursorRoot.Size = UDim2.fromOffset(0, 0)
-cursorRoot.BackgroundTransparency = 1
-cursorRoot.BorderSizePixel = 0
-cursorRoot.Active = false
-cursorRoot.Visible = false
-cursorRoot.Parent = cursorGui
-
-local cursorScale = Instance.new("UIScale")
-cursorScale.Name = "CursorScale"
-cursorScale.Scale = 1.0
-cursorScale.Parent = cursorRoot
-
--- Soft radial bloom/glow behind pointer tip (smoothly matches accent)
-local cursorGlow = Instance.new("ImageLabel")
-cursorGlow.Name = "CursorGlow"
-cursorGlow.AnchorPoint = Vector2.new(0.5, 0.5)
-cursorGlow.Position = UDim2.fromOffset(3, 3)
-cursorGlow.Size = UDim2.fromOffset(36, 36)
-cursorGlow.BackgroundTransparency = 1
-cursorGlow.Image = "rbxassetid://10734962068"
-cursorGlow.ImageColor3 = ACCENT
-cursorGlow.ImageTransparency = 0.68
-cursorGlow.ZIndex = 1
-cursorGlow.Active = false
-cursorGlow.Parent = cursorRoot
-
--- Soft drop shadow
-local cursorShadow = Instance.new("ImageLabel")
-cursorShadow.Name = "CursorShadow"
-cursorShadow.Position = UDim2.fromOffset(-3, -3)
-cursorShadow.Size = UDim2.fromOffset(24, 24)
-cursorShadow.BackgroundTransparency = 1
-cursorShadow.Image = ICONS["mouse-pointer-2"].url
-cursorShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-cursorShadow.ImageTransparency = 0.55
-cursorShadow.ZIndex = 2
-cursorShadow.Active = false
-cursorShadow.Parent = cursorRoot
-
--- Dark crisp border outlines in 4 cardinal directions for razor-sharp visibility on any background
-local outlineDeltas = {
-	Vector2.new(-5, -4),
-	Vector2.new(-3, -4),
-	Vector2.new(-4, -5),
-	Vector2.new(-4, -3)
-}
-for i, delta in ipairs(outlineDeltas) do
-	local outline = Instance.new("ImageLabel")
-	outline.Name = "CursorBorder_" .. i
-	outline.Position = UDim2.fromOffset(delta.X, delta.Y)
-	outline.Size = UDim2.fromOffset(24, 24)
-	outline.BackgroundTransparency = 1
-	outline.Image = ICONS["mouse-pointer-2"].url
-	outline.ImageColor3 = Color3.fromRGB(8, 8, 12)
-	outline.ImageTransparency = 0.20
-	outline.ZIndex = 3
-	outline.Active = false
-	outline.Parent = cursorRoot
-end
-
--- Main accent pointer
-local cursorMain = Instance.new("ImageLabel")
-cursorMain.Name = "CursorMain"
-cursorMain.Position = UDim2.fromOffset(-4, -4)
-cursorMain.Size = UDim2.fromOffset(24, 24)
-cursorMain.BackgroundTransparency = 1
-cursorMain.Image = ICONS["mouse-pointer-2"].url
-cursorMain.ImageColor3 = ACCENT
-cursorMain.ZIndex = 4
-cursorMain.Active = false
-cursorMain.Parent = cursorRoot
-
--- Surgical precision tip dot at (0, 0)
-local cursorTip = Instance.new("Frame")
-cursorTip.Name = "CursorTip"
-cursorTip.AnchorPoint = Vector2.new(0.5, 0.5)
-cursorTip.Position = UDim2.fromOffset(0, 0)
-cursorTip.Size = UDim2.fromOffset(2, 2)
-cursorTip.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-cursorTip.BackgroundTransparency = 0.15
-cursorTip.BorderSizePixel = 0
-cursorTip.ZIndex = 5
-cursorTip.Active = false
-cursorTip.Parent = cursorRoot
-local tipCorner = Instance.new("UICorner")
-tipCorner.CornerRadius = UDim.new(1, 0)
-tipCorner.Parent = cursorTip
-
-local customCursorEnabled = true
-
-updateCursorAccent = function(targetAccent: Color3, duration: number?)
-	local dur = duration or 0.35
-	if dur > 0 then
-		local tweenInfo = TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		TweenService:Create(cursorMain, tweenInfo, { ImageColor3 = targetAccent }):Play()
-		TweenService:Create(cursorGlow, tweenInfo, { ImageColor3 = targetAccent }):Play()
-	else
-		cursorMain.ImageColor3 = targetAccent
-		cursorGlow.ImageColor3 = targetAccent
-	end
-end
-
-	syncCustomCursorVisibility = function()
-		local shouldShow = customCursorEnabled and ((isInterfaceOpen and scalerRoot and scalerRoot.Visible) or isCurrentlyLoading)
-		if shouldShow then
-			if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-			end
-			UserInputService.MouseIconEnabled = false
-			pcall(function()
-				UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceHide
-			end)
-			cursorRoot.Visible = true
-			local mousePos = UserInputService:GetMouseLocation()
-			cursorRoot.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
-		else
-			cursorRoot.Visible = false
-			if not isInterfaceOpen and not isCurrentlyLoading then
-				UserInputService.MouseIconEnabled = true
-				pcall(function()
-					UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
-				end)
-			end
-		end
-	end
-
-	setCustomCursorEnabled = function(enabled: boolean)
-		customCursorEnabled = enabled
-		syncCustomCursorVisibility()
-	end
-
--- Cursor mouse movement tracking for immediate zero-latency feedback
-UserInputService.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement and cursorRoot.Visible then
-		local mousePos = UserInputService:GetMouseLocation()
-		cursorRoot.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
-	end
-end)
-
--- Tactile click press / release micro-animation
-UserInputService.InputBegan:Connect(function(input, processed)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorRoot.Visible then
-		TweenService:Create(cursorScale, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Scale = 0.88
-		}):Play()
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input, processed)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorRoot.Visible then
-			TweenService:Create(cursorScale, TweenInfo.new(0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-				Scale = 1.0
-			}):Play()
-		end
-	end)
-end
-setupCustomCursor()
 
 --------------------------------------------------------------------------------
 -- MODULE DATA (1:1 with preview index.tsx)
@@ -1765,7 +1570,7 @@ UserInputService.InputChanged:Connect(function(inp)
 end)
 
 -- Scaler Root: 1180 x 720 base matching preview's width: min(1180px, 94vw); height: min(720px, 86vh)
-scalerRoot = Instance.new("Frame")
+local scalerRoot = Instance.new("Frame")
 scalerRoot.Name = "ScalerRoot"
 scalerRoot.AnchorPoint = Vector2.new(0.5, 0.5)
 scalerRoot.Position = UDim2.fromScale(0.5, 0.5)
@@ -1787,7 +1592,7 @@ modalLock.ZIndex = 0
 modalLock.Modal = false
 modalLock.Parent = scalerRoot
 
-isInterfaceOpen = false
+local isInterfaceOpen = false
 local cursorLoopConn = nil
 local previousMouseBehavior = UserInputService.MouseBehavior
 
@@ -1809,6 +1614,115 @@ local function enableGameControls()
     ContextActionService:UnbindAction("VapeUI_BlockInput")
 end
 
+--------------------------------------------------------------------------------
+-- CUSTOM ACCENT CURSOR
+--------------------------------------------------------------------------------
+local customCursorGui = Instance.new("ScreenGui")
+customCursorGui.Name = "VapeCustomCursorGui"
+customCursorGui.ResetOnSpawn = false
+customCursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+customCursorGui.DisplayOrder = 2147483647
+customCursorGui.IgnoreGuiInset = true
+customCursorGui.Parent = targetGuiParent
+
+local cursorContainer = Instance.new("Frame")
+cursorContainer.Name = "CursorContainer"
+cursorContainer.Size = UDim2.fromOffset(24, 24)
+cursorContainer.AnchorPoint = Vector2.new(0, 0)
+cursorContainer.BackgroundTransparency = 1
+cursorContainer.BorderSizePixel = 0
+cursorContainer.ZIndex = 2147483647
+cursorContainer.Visible = false
+cursorContainer.Parent = customCursorGui
+
+-- Ambient soft glow matching accent color
+local cursorGlow = Instance.new("ImageLabel")
+cursorGlow.Name = "CursorGlow"
+cursorGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+cursorGlow.Position = UDim2.fromOffset(4, 4)
+cursorGlow.Size = UDim2.fromOffset(34, 34)
+cursorGlow.BackgroundTransparency = 1
+cursorGlow.Image = "rbxassetid://8992230677"
+cursorGlow.ImageColor3 = ACCENT
+cursorGlow.ImageTransparency = 0.35
+cursorGlow.ScaleType = Enum.ScaleType.Slice
+cursorGlow.SliceCenter = Rect.new(135, 135, 135, 135)
+cursorGlow.ZIndex = 2147483646
+cursorGlow.Parent = cursorContainer
+
+-- Shadow/border outline for the arrow cursor
+local cursorShadow = Instance.new("ImageLabel")
+cursorShadow.Name = "CursorShadow"
+cursorShadow.Size = UDim2.fromOffset(22, 22)
+cursorShadow.Position = UDim2.fromOffset(0, 0)
+cursorShadow.BackgroundTransparency = 1
+cursorShadow.Image = "rbxassetid://6031091004"
+cursorShadow.ImageColor3 = Color3.fromRGB(10, 10, 13)
+cursorShadow.ImageTransparency = 0.15
+cursorShadow.ZIndex = 2147483647
+cursorShadow.Parent = cursorContainer
+
+-- Main pointer arrow colored with current accent
+local cursorMain = Instance.new("ImageLabel")
+cursorMain.Name = "CursorMain"
+cursorMain.Size = UDim2.fromOffset(19, 19)
+cursorMain.Position = UDim2.fromOffset(1, 1)
+cursorMain.BackgroundTransparency = 1
+cursorMain.Image = "rbxassetid://6031091004"
+cursorMain.ImageColor3 = ACCENT
+cursorMain.ZIndex = 2147483648
+cursorMain.Parent = cursorContainer
+
+-- Center core highlight dot for crisp precision clicking
+local cursorDot = Instance.new("Frame")
+cursorDot.Name = "CursorDot"
+cursorDot.Size = UDim2.fromOffset(3, 3)
+cursorDot.Position = UDim2.fromOffset(4, 4)
+cursorDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+cursorDot.BackgroundTransparency = 0.2
+cursorDot.BorderSizePixel = 0
+cursorDot.ZIndex = 2147483649
+cursorDot.Parent = cursorContainer
+addCorner(cursorDot, 2)
+
+-- Function to update the custom cursor color smoothly or directly
+cursorSetAccentColor = function(col: Color3)
+	cursorMain.ImageColor3 = col
+	cursorGlow.ImageColor3 = col
+end
+
+local isCursorClicking = false
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isCursorClicking = true
+		if cursorContainer.Visible then
+			TweenService:Create(cursorMain, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(17, 17)
+			}):Play()
+			TweenService:Create(cursorGlow, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(26, 26),
+				ImageTransparency = 0.15
+			}):Play()
+		end
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		isCursorClicking = false
+		if cursorContainer.Visible then
+			TweenService:Create(cursorMain, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(19, 19)
+			}):Play()
+			TweenService:Create(cursorGlow, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(34, 34),
+				ImageTransparency = 0.35
+			}):Play()
+		end
+	end
+end)
+
 local function setInterfaceActive(active: boolean)
     isInterfaceOpen = active
     modalLock.Modal = active
@@ -1817,26 +1731,21 @@ local function setInterfaceActive(active: boolean)
         previousMouseBehavior = UserInputService.MouseBehavior
         if cursorLoopConn then cursorLoopConn:Disconnect() end
         cursorLoopConn = RunService.RenderStepped:Connect(function()
-            local shouldShow = customCursorEnabled and ((isInterfaceOpen and scalerRoot.Visible) or isCurrentlyLoading)
-            if shouldShow then
+            local showCustomCursor = (isInterfaceOpen and scalerRoot.Visible) or (isCurrentlyLoading and currentLoader ~= nil)
+            if showCustomCursor then
                 if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
                     UserInputService.MouseBehavior = Enum.MouseBehavior.Default
                 end
+                -- Hide native Roblox cursor while custom accent cursor is rendered
+                UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
                 UserInputService.MouseIconEnabled = false
-                pcall(function()
-                    UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceHide
-                end)
-                cursorRoot.Visible = true
+
                 local mousePos = UserInputService:GetMouseLocation()
-                cursorRoot.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
+                cursorContainer.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
+                cursorContainer.Visible = true
             else
-                cursorRoot.Visible = false
-                if not isInterfaceOpen and not isCurrentlyLoading then
-                    UserInputService.MouseIconEnabled = true
-                    pcall(function()
-                        UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
-                    end)
-                end
+                cursorContainer.Visible = false
+                UserInputService.MouseIconEnabled = true
             end
         end)
     else
@@ -1845,10 +1754,10 @@ local function setInterfaceActive(active: boolean)
             cursorLoopConn:Disconnect()
             cursorLoopConn = nil
         end
-        cursorRoot.Visible = false
+        cursorContainer.Visible = false
         UserInputService.MouseIconEnabled = true
+        UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
         pcall(function()
-            UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
             UserInputService.MouseBehavior = previousMouseBehavior or Enum.MouseBehavior.Default
         end)
     end
@@ -3260,7 +3169,7 @@ local refreshConfigList: () -> ()
 --------------------------------------------------------------------------------
 -- HOME PAGE (Glassy Dashboard with Live Game & Session Stats)
 --------------------------------------------------------------------------------
-local function buildHomePage()
+do
 	homePage = Instance.new("ScrollingFrame")
 	homePage.Name = "HomePage"
 	homePage.Size = UDim2.fromScale(1, 1)
@@ -3699,12 +3608,11 @@ local function buildHomePage()
 		if fpsConn then fpsConn:Disconnect() end
 	end)
 end -- End of Home Page scope
-buildHomePage()
 
 -- (Friends tab removed)
 
 -- Universal named configuration manager (rebuilt 1:1 to match Modules tab)
-local function buildSettingsPage()
+do
 	settingsPage = Instance.new("Frame")
 settingsPage.Name = "SettingsPage"
 settingsPage.Size = UDim2.fromScale(1, 1)
@@ -4104,7 +4012,7 @@ refreshConfigList = function()
 		settingsCategoryButtons["Themes"].badge.Text = "6"
 	end
 	if settingsCategoryButtons["Interface"] and settingsCategoryButtons["Interface"].badge then
-		settingsCategoryButtons["Interface"].badge.Text = "4"
+		settingsCategoryButtons["Interface"].badge.Text = "3"
 	end
 	if settingsCategoryButtons["General"] and settingsCategoryButtons["General"].badge then
 		settingsCategoryButtons["General"].badge.Text = "2"
@@ -4235,7 +4143,7 @@ refreshConfigList = function()
 		}
 
 		for _, item in ipairs(themeColors) do
-			local isCurrent = sameColor(activeSelectedAccent, item.color)
+			local isCurrent = (THEME.warmAmber == item.color)
 
 			local rowWrapper = Instance.new("Frame")
 			rowWrapper.Size = UDim2.new(1, 0, 0, 68)
@@ -4295,7 +4203,6 @@ refreshConfigList = function()
 		local uiOptions = {
 			{ name = "Acrylic Blur", summary = "Realistic frosted glass blur behind the interface window", kind = "toggle", enabled = true },
 			{ name = "Smooth Animations", summary = "Smooth transition tweens for drawers and tab switches", kind = "toggle", enabled = true },
-			{ name = "Custom Cursor", summary = "Accent-reactive sleek custom cursor with smooth color transitions", kind = "toggle", enabled = customCursorEnabled, onToggle = function(state) setCustomCursorEnabled(state) end },
 			{ name = "Interface Sizing", summary = "Scale factor multiplier for all window elements", kind = "info" },
 		}
 
@@ -4340,7 +4247,6 @@ refreshConfigList = function()
 				createToggle(toggleHolder, opt.enabled, function(val)
 					opt.enabled = val
 					accentPill.BackgroundColor3 = val and THEME.primary or THEME.accent
-					if opt.onToggle then opt.onToggle(val) end
 				end)
 			end
 		end
@@ -4406,7 +4312,6 @@ saveButton.Activated:Connect(function()
 	end
 end)
 end -- End of Settings Page scope
-buildSettingsPage()
 
 local activeTab = "Home"
 local navTabs = {}
@@ -4497,7 +4402,7 @@ switchTab("Home")
 --------------------------------------------------------------------------------
 -- LOADING SCREEN & WINDOW-IN ANIMATION (1:1 with preview .loader-window & @keyframes window-in)
 --------------------------------------------------------------------------------
-isCurrentlyLoading = false
+local isCurrentlyLoading = false
 local currentLoader: Instance? = nil
 
 local function animateWindowIn()
@@ -4530,14 +4435,7 @@ local function showLoadingScreen()
 
 	-- Hide the main interface during loading (1:1 with web preview)
 	scalerRoot.Visible = false
-	setInterfaceActive(false)
-	if customCursorEnabled then
-		cursorRoot.Visible = true
-		UserInputService.MouseIconEnabled = false
-		pcall(function()
-			UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.ForceHide
-		end)
-	end
+	setInterfaceActive(true)
 
 	local loaderRoot = Instance.new("Frame")
 	loaderRoot.Name = "LoaderRoot"
@@ -4814,7 +4712,7 @@ end)
 -- RESIZE DRAGGER (bottom-right corner - matching SimpleUI specification)
 --------------------------------------------------------------------------------
 local resizing = false
-local function setupResizeDragger()
+do
 	local resizeDragger = Instance.new("ImageLabel")
 	resizeDragger.Name = "resize"
 	resizeDragger.Size = UDim2.new(0, 20, 0, 20)
@@ -4890,7 +4788,6 @@ local function setupResizeDragger()
 		end
 	end)
 end
-setupResizeDragger()
 
 --------------------------------------------------------------------------------
 -- KEYBOARD SHORTCUT (Right Shift toggle + module hotkeys)
