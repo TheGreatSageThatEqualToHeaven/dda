@@ -95,7 +95,45 @@ local function onAccentChange(fn: (Color3) -> ())
 	pcall(fn, THEME.warmAmber)
 end
 
+local function sameColor(a: Color3, b: Color3): boolean
+	return math.round(a.R * 255) == math.round(b.R * 255)
+		and math.round(a.G * 255) == math.round(b.G * 255)
+		and math.round(a.B * 255) == math.round(b.B * 255)
+end
+
+local ACCENT_PROPS = { "BackgroundColor3", "TextColor3", "ImageColor3", "PlaceholderColor3", "ScrollBarImageColor3", "TextStrokeColor3" }
+
+-- Walks the whole interface and swaps any color that matched the previous accent
+-- (or its hover tint) for the new one, so nothing is left in the old color.
+local function repaintAccent(oldAccent: Color3, newAccent: Color3, oldHover: Color3, newHover: Color3, oldKnob: Color3, newKnob: Color3)
+	for _, obj in ipairs(gui:GetDescendants()) do
+		if obj:IsA("UIStroke") then
+			if sameColor(obj.Color, oldAccent) then obj.Color = newAccent
+			elseif sameColor(obj.Color, oldHover) then obj.Color = newHover end
+		elseif obj:IsA("GuiObject") then
+			if obj.Name == "Knob" and obj.Parent and obj.Parent.Name == "ToggleTrack" then
+				if sameColor(obj.BackgroundColor3, oldKnob) and obj.Parent.BackgroundColor3 and sameColor(obj.Parent.BackgroundColor3, oldAccent) then
+					obj.BackgroundColor3 = newKnob
+				end
+			end
+			for _, prop in ipairs(ACCENT_PROPS) do
+				local ok, value = pcall(function() return (obj :: any)[prop] end)
+				if ok and typeof(value) == "Color3" then
+					if sameColor(value, oldAccent) then
+						pcall(function() (obj :: any)[prop] = newAccent end)
+					elseif sameColor(value, oldHover) then
+						pcall(function() (obj :: any)[prop] = newHover end)
+					end
+				end
+			end
+		end
+	end
+end
+
 local function setAccentColor(newColor: Color3)
+	local oldAccent = THEME.primary
+	local oldHover = THEME.accentHover
+	local oldKnob = THEME.toggleOnKnob
 	THEME.warmAmber = newColor
 	THEME.brandTeal = newColor
 	THEME.primary = newColor
@@ -103,9 +141,14 @@ local function setAccentColor(newColor: Color3)
 	THEME.accentHover = newColor:Lerp(Color3.fromRGB(255, 255, 255), 0.18)
 	local lum = 0.299 * newColor.R + 0.587 * newColor.G + 0.114 * newColor.B
 	THEME.toggleOnKnob = lum > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)
+	repaintAccent(oldAccent, newColor, oldHover, THEME.accentHover, oldKnob, THEME.toggleOnKnob)
 	for _, fn in ipairs(accentListeners) do
 		pcall(fn, newColor)
 	end
+	-- Second pass catches tweens that were still animating toward the old accent.
+	task.delay(0.35, function()
+		repaintAccent(oldAccent, newColor, oldHover, THEME.accentHover, oldKnob, THEME.toggleOnKnob)
+	end)
 end
 
 
@@ -686,12 +729,14 @@ local function createActionButton(parent: Instance, text: string, iconName: stri
 	lbl.TextXAlignment = (iconOffset > 0) and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
 	lbl.Parent = btn
 
+	local isAccentVariant = (variant == "primary" or variant == "brand")
+
 	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = hoverBg }):Play()
+		TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = isAccentVariant and THEME.accentHover or hoverBg }):Play()
 	end)
 
 	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = baseBg }):Play()
+		TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = isAccentVariant and THEME.primary or baseBg }):Play()
 	end)
 
 	btn.MouseButton1Down:Connect(function()
@@ -1866,6 +1911,7 @@ categoryPad.Parent = categoryHolder
 
 local categoryLayout = Instance.new("UIListLayout")
 categoryLayout.Padding = UDim.new(0, 6)
+categoryLayout.SortOrder = Enum.SortOrder.LayoutOrder
 categoryLayout.Parent = categoryHolder
 
 -- Signed-in Roblox player section, connected flush to the bottom of the rail.
@@ -2813,7 +2859,7 @@ end
 onAccentChange(function() updateCategories() end)
 
 
-for _, c in ipairs(categories) do
+for categoryIndex, c in ipairs(categories) do
 	local count = 0
 	if c.id == "Favorites" then
 		for _, m in ipairs(modules) do if enabledState[m.name] then count += 1 end end
@@ -2823,6 +2869,7 @@ for _, c in ipairs(categories) do
 
 	local b = Instance.new("TextButton")
 	b.Name = "Category_" .. c.id
+	b.LayoutOrder = categoryIndex
 	b.AutoButtonColor = false
 	b.Size = UDim2.new(1, 0, 0, 48)
 	b.BackgroundTransparency = 1
@@ -3029,45 +3076,14 @@ do
 	heroLeftLayout.Padding = UDim.new(0, 7)
 	heroLeftLayout.Parent = heroLeft
 
-	local liveBadge = Instance.new("Frame")
-	liveBadge.LayoutOrder = 1
-	liveBadge.Size = UDim2.fromOffset(0, 23)
-	liveBadge.AutomaticSize = Enum.AutomaticSize.X
-	liveBadge.BackgroundColor3 = Color3.fromRGB(16, 20, 28)
-	liveBadge.BackgroundTransparency = 0.2
-	liveBadge.BorderSizePixel = 0
-	liveBadge.ZIndex = 5
-	liveBadge.Parent = heroLeft
-	addCorner(liveBadge, 12)
-	addStroke(liveBadge, Color3.fromRGB(52, 211, 153), 1, 0.78)
-	local liveLayout = Instance.new("UIListLayout")
-	liveLayout.FillDirection = Enum.FillDirection.Horizontal
-	liveLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	liveLayout.Padding = UDim.new(0, 7)
-	liveLayout.Parent = liveBadge
-	local livePad = Instance.new("UIPadding")
-	livePad.PaddingLeft = UDim.new(0, 10)
-	livePad.PaddingRight = UDim.new(0, 10)
-	livePad.Parent = liveBadge
-	local liveDot = Instance.new("Frame")
-	liveDot.Size = UDim2.fromOffset(6, 6)
-	liveDot.BackgroundColor3 = Color3.fromRGB(52, 211, 153)
-	liveDot.BorderSizePixel = 0
-	liveDot.ZIndex = 6
-	liveDot.Parent = liveBadge
-	addCorner(liveDot, 3)
-	local liveText = createLabel(liveBadge, "ACTIVE EXPERIENCE", 10, Color3.fromRGB(220, 225, 235), Enum.Font.GothamBold)
-	liveText.Size = UDim2.fromOffset(0, 19)
-	liveText.AutomaticSize = Enum.AutomaticSize.X
-	liveText.ZIndex = 6
 
 	local heroTitle = createLabel(heroLeft, (game.Name and game.Name ~= "") and game.Name or "Roblox Experience", 23, THEME.textPrimary, Enum.Font.GothamBold)
-	heroTitle.LayoutOrder = 2
+	heroTitle.LayoutOrder = 1
 	heroTitle.Size = UDim2.new(1, 0, 0, 30)
 	heroTitle.TextTruncate = Enum.TextTruncate.AtEnd
 	heroTitle.ZIndex = 5
 	local heroMeta = createLabel(heroLeft, "Place: " .. tostring(placeId or 0) .. "    •    " .. ((game.JobId and game.JobId ~= "") and (game.JobId:sub(1, 8) .. "...") or "Local Server"), 11, Color3.fromRGB(205, 207, 214), Enum.Font.GothamMedium)
-	heroMeta.LayoutOrder = 3
+	heroMeta.LayoutOrder = 2
 	heroMeta.Size = UDim2.new(1, 0, 0, 18)
 	heroMeta.TextTruncate = Enum.TextTruncate.AtEnd
 	heroMeta.ZIndex = 5
@@ -3350,6 +3366,7 @@ settingsCatPad.Parent = settingsCategoryHolder
 
 local settingsCatLayout = Instance.new("UIListLayout")
 settingsCatLayout.Padding = UDim.new(0, 6)
+settingsCatLayout.SortOrder = Enum.SortOrder.LayoutOrder
 settingsCatLayout.Parent = settingsCategoryHolder
 
 -- Signed-in Roblox player section flush at the bottom of the Settings rail
@@ -3551,7 +3568,7 @@ configStatus.Size = UDim2.new(1, -60, 0, 16)
 
 local function setConfigStatus(message: string, success: boolean?)
 	configStatus.Text = message
-	configStatus.TextColor3 = success == false and Color3.fromRGB(245, 68, 68) or (success == true and THEME.brandTeal or THEME.textMuted)
+	configStatus.TextColor3 = success == false and Color3.fromRGB(235, 72, 72) or (success == true and THEME.brandTeal or THEME.textMuted)
 end
 
 -- Scrolling list for Settings (exact layout as moduleList)
@@ -3586,7 +3603,7 @@ local selectedSettingsCategory = "Profiles"
 -- Settings Categories Definition
 local settingsCategories = {
 	{ id = "Profiles",  name = "Profiles",  icon = "folder" },
-	{ id = "Themes",    name = "Themes",    icon = "sliders" },
+	{ id = "Themes",    name = "Theme",     icon = "sliders" },
 	{ id = "Interface", name = "Interface", icon = "eye" },
 	{ id = "General",   name = "General",   icon = "settings" },
 }
@@ -3609,9 +3626,10 @@ local function updateSettingsCategories()
 end
 onAccentChange(function() updateSettingsCategories() end)
 
-for _, c in ipairs(settingsCategories) do
+for settingsIndex, c in ipairs(settingsCategories) do
 	local b = Instance.new("TextButton")
 	b.Name = "Category_" .. c.id
+	b.LayoutOrder = settingsIndex
 	b.AutoButtonColor = false
 	b.Size = UDim2.new(1, 0, 0, 48)
 	b.BackgroundTransparency = 1
