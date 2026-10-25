@@ -107,7 +107,12 @@ local ACCENT_PROPS = { "BackgroundColor3", "TextColor3", "ImageColor3", "Placeho
 -- (or its hover tint) for the new one, so nothing is left in the old color.
 local function repaintAccent(oldAccent: Color3, newAccent: Color3, oldHover: Color3, newHover: Color3, oldKnob: Color3, newKnob: Color3)
 	for _, obj in ipairs(gui:GetDescendants()) do
-		if obj:IsA("UIStroke") then
+		-- Theme swatches always show their own color and are never repainted.
+		local fixed = obj:GetAttribute("FixedColor") == true
+			or (obj.Parent ~= nil and obj.Parent:GetAttribute("FixedColor") == true)
+		if fixed then
+			continue
+		elseif obj:IsA("UIStroke") then
 			if sameColor(obj.Color, oldAccent) then obj.Color = newAccent
 			elseif sameColor(obj.Color, oldHover) then obj.Color = newHover end
 		elseif obj:IsA("GuiObject") then
@@ -3003,10 +3008,10 @@ do
 	heroCard.ClipsDescendants = true
 	heroCard.Parent = homePage
 	addCorner(heroCard, 16)
-	addStroke(heroCard, Color3.fromRGB(255, 255, 255), 1, 0.91)
+	local heroStroke = addStroke(heroCard, Color3.fromRGB(255, 255, 255), 1, 0.91)
 
 	local placeId = game.PlaceId
-	local thumbnailMask = Instance.new("Frame")
+	local thumbnailMask = Instance.new("CanvasGroup")
 	thumbnailMask.Name = "ThumbnailMask"
 	thumbnailMask.Size = UDim2.fromScale(1, 1)
 	thumbnailMask.BackgroundTransparency = 1
@@ -3018,7 +3023,9 @@ do
 
 	local gameThumb = Instance.new("ImageLabel")
 	gameThumb.Name = "GameThumbnail"
-	gameThumb.Size = UDim2.fromScale(1, 1)
+	gameThumb.AnchorPoint = Vector2.new(0.5, 0.5)
+	gameThumb.Position = UDim2.fromScale(0.5, 0.5)
+	gameThumb.Size = UDim2.fromScale(1.12, 1.12) -- oversized so it can drift without showing edges
 	gameThumb.BackgroundTransparency = 1
 	gameThumb.BorderSizePixel = 0
 	gameThumb.ScaleType = Enum.ScaleType.Crop
@@ -3027,7 +3034,6 @@ do
 		or "rbxassetid://10723395457"
 	gameThumb.ZIndex = 1
 	gameThumb.Parent = thumbnailMask
-	addCorner(gameThumb, 16)
 
 	local heroOverlay = Instance.new("Frame")
 	heroOverlay.Name = "VignetteOverlay"
@@ -3064,6 +3070,97 @@ do
 	heroPad.PaddingLeft = UDim.new(0, 22)
 	heroPad.PaddingRight = UDim.new(0, 22)
 	heroPad.Parent = heroContent
+
+	----------------------------------------------------------------------------
+	-- 3D HOVER TILT: the thumbnail drifts away from the cursor, the text floats
+	-- toward it, a glare follows the pointer and the far side shades darker,
+	-- which reads as the card tilting in 3D.
+	----------------------------------------------------------------------------
+	local tiltShade = Instance.new("Frame")
+	tiltShade.Name = "TiltShade"
+	tiltShade.Size = UDim2.fromScale(1, 1)
+	tiltShade.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	tiltShade.BackgroundTransparency = 1
+	tiltShade.BorderSizePixel = 0
+	tiltShade.ZIndex = 3
+	tiltShade.Parent = thumbnailMask
+	local tiltShadeGrad = Instance.new("UIGradient")
+	tiltShadeGrad.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.55, 0.85),
+		NumberSequenceKeypoint.new(1, 0.25),
+	})
+	tiltShadeGrad.Parent = tiltShade
+
+	local tiltGlare = Instance.new("Frame")
+	tiltGlare.Name = "TiltGlare"
+	tiltGlare.AnchorPoint = Vector2.new(0.5, 0.5)
+	tiltGlare.Position = UDim2.fromScale(0.5, 0.5)
+	tiltGlare.Size = UDim2.fromScale(2, 2)
+	tiltGlare.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	tiltGlare.BackgroundTransparency = 1
+	tiltGlare.BorderSizePixel = 0
+	tiltGlare.ZIndex = 3
+	tiltGlare.Parent = thumbnailMask
+	local tiltGlareGrad = Instance.new("UIGradient")
+	tiltGlareGrad.Rotation = 25
+	tiltGlareGrad.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.42, 1),
+		NumberSequenceKeypoint.new(0.5, 0.55),
+		NumberSequenceKeypoint.new(0.58, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	tiltGlareGrad.Parent = tiltGlare
+
+	local tiltX, tiltY, tiltHover = 0, 0, 0
+	local tiltConn
+	tiltConn = RunService.RenderStepped:Connect(function(dt)
+		if not (gui and gui.Parent) then
+			if tiltConn then tiltConn:Disconnect() end
+			return
+		end
+		if not homePage.Visible then return end
+
+		local mouse = UserInputService:GetMouseLocation()
+		local pos, size = heroCard.AbsolutePosition, heroCard.AbsoluteSize
+		local inside = size.X > 0 and mouse.X >= pos.X and mouse.X <= pos.X + size.X
+			and mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y
+
+		local targetX, targetY, targetHover = 0, 0, 0
+		if inside then
+			targetX = math.clamp(((mouse.X - pos.X) / size.X) * 2 - 1, -1, 1)
+			targetY = math.clamp(((mouse.Y - pos.Y) / size.Y) * 2 - 1, -1, 1)
+			targetHover = 1
+		end
+
+		-- Frame-rate independent smoothing
+		local a = 1 - math.exp(-dt * 10)
+		tiltX += (targetX - tiltX) * a
+		tiltY += (targetY - tiltY) * a
+		tiltHover += (targetHover - tiltHover) * a
+
+		-- Thumbnail moves opposite the cursor and zooms in slightly (far layer)
+		gameThumb.Position = UDim2.new(0.5, -tiltX * 14, 0.5, -tiltY * 9)
+		local zoom = 1.12 + 0.05 * tiltHover
+		gameThumb.Size = UDim2.fromScale(zoom, zoom)
+
+		-- Text layer floats toward the cursor (near layer)
+		heroContent.Position = UDim2.fromOffset(tiltX * 6, tiltY * 4)
+
+		-- Far side shades darker, like the card is tipping away
+		tiltShade.BackgroundTransparency = 1 - 0.6 * tiltHover
+		tiltShadeGrad.Rotation = math.deg(math.atan2(-tiltY, -tiltX))
+
+		-- Glare streak follows the pointer
+		tiltGlare.BackgroundTransparency = 1 - 0.35 * tiltHover
+		tiltGlareGrad.Offset = Vector2.new(tiltX * 0.25, tiltY * 0.25)
+		tiltGlareGrad.Rotation = 25 + tiltX * 12
+
+		-- Edge glow picks up the live accent while hovered
+		heroStroke.Color = Color3.fromRGB(255, 255, 255):Lerp(THEME.primary, tiltHover)
+		heroStroke.Transparency = 0.91 - 0.5 * tiltHover
+	end)
 
 	local heroLeft = Instance.new("Frame")
 	heroLeft.Size = UDim2.fromScale(1, 1)
@@ -3866,6 +3963,7 @@ refreshConfigList = function()
 			accentPill.Position = UDim2.fromScale(0, 0)
 			accentPill.Size = UDim2.new(0, 4, 1, 0)
 			accentPill.BackgroundColor3 = item.color
+			accentPill:SetAttribute("FixedColor", true)
 			accentPill.BorderSizePixel = 0
 			accentPill.Parent = row
 			addCorner(accentPill, 2)
@@ -3874,6 +3972,7 @@ refreshConfigList = function()
 			previewPill.Position = UDim2.fromOffset(22, 22)
 			previewPill.Size = UDim2.fromOffset(24, 24)
 			previewPill.BackgroundColor3 = item.color
+			previewPill:SetAttribute("FixedColor", true)
 			previewPill.BorderSizePixel = 0
 			previewPill.Parent = row
 			addCorner(previewPill, 12)
