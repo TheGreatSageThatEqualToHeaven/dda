@@ -61,6 +61,10 @@ gui.Parent = targetGuiParent
 --------------------------------------------------------------------------------
 -- DESIGN TOKENS (1:1 with preview CSS variables and OKLCH color definitions)
 --------------------------------------------------------------------------------
+-- ONE accent color drives every highlight: toggles, sliders, tabs, categories,
+-- badges, checkmarks, focus outlines, buttons and the loader bar.
+local ACCENT = Color3.fromRGB(0, 163, 124)
+
 local THEME = {
 	bgWindow       = Color3.fromRGB(10, 10, 13),       -- var(--card): #0a0a0d (deep obsidian)
 	bgTopbar       = Color3.fromRGB(10, 10, 13),       -- var(--card)
@@ -75,13 +79,14 @@ local THEME = {
 	textSecondary  = Color3.fromRGB(169, 171, 176),   -- var(--secondary-foreground): #a9abb0
 	secondaryFg   = Color3.fromRGB(169, 171, 176),   -- keyboard bind text
 	textMuted      = Color3.fromRGB(120, 122, 128),   -- var(--muted-foreground): #787a80
-	brandTeal      = Color3.fromRGB(0, 163, 124),     -- var(--brand): #00a37c (emerald badge / slider)
-	warmAmber      = Color3.fromRGB(232, 127, 37),    -- var(--warm): #e87f25 (active category accent)
+	brandTeal      = ACCENT,                          -- unified accent
+	warmAmber      = ACCENT,                          -- unified accent (was orange)
 	toggleOffTrack = Color3.fromRGB(35, 36, 40),       -- var(--accent)
 	toggleOffKnob  = Color3.fromRGB(120, 122, 128),   -- var(--muted-foreground)
-	primary        = Color3.fromRGB(244, 245, 246),   -- active controls and tab underline
-	toggleOnTrack  = Color3.fromRGB(244, 245, 246),   -- var(--primary): crisp white
-	toggleOnKnob   = Color3.fromRGB(10, 10, 13),       -- var(--primary-foreground): obsidian
+	primary        = ACCENT,                          -- unified accent: active controls and tab underline
+	toggleOnTrack  = ACCENT,                          -- unified accent
+	toggleOnKnob   = Color3.fromRGB(255, 255, 255),   -- white knob, same as slider thumb
+	accentHover    = ACCENT:Lerp(Color3.fromRGB(255, 255, 255), 0.18),
 }
 
 local accentListeners = {}
@@ -93,6 +98,11 @@ end
 local function setAccentColor(newColor: Color3)
 	THEME.warmAmber = newColor
 	THEME.brandTeal = newColor
+	THEME.primary = newColor
+	THEME.toggleOnTrack = newColor
+	THEME.accentHover = newColor:Lerp(Color3.fromRGB(255, 255, 255), 0.18)
+	local lum = 0.299 * newColor.R + 0.587 * newColor.G + 0.114 * newColor.B
+	THEME.toggleOnKnob = lum > 0.75 and THEME.bgWindow or Color3.fromRGB(255, 255, 255)
 	for _, fn in ipairs(accentListeners) do
 		pcall(fn, newColor)
 	end
@@ -638,12 +648,12 @@ local function createActionButton(parent: Instance, text: string, iconName: stri
 
 	if variant == "primary" then
 		baseBg = THEME.primary
-		hoverBg = Color3.fromRGB(255, 255, 255)
+		hoverBg = THEME.accentHover
 		baseFg = THEME.bgWindow
 		strokeColor = THEME.primary
 	elseif variant == "brand" then
 		baseBg = THEME.brandTeal
-		hoverBg = Color3.fromRGB(20, 185, 145)
+		hoverBg = THEME.accentHover
 		baseFg = Color3.fromRGB(255, 255, 255)
 		strokeColor = THEME.brandTeal
 	else
@@ -2417,7 +2427,7 @@ refreshModules = function()
 				addCorner(btn, 6)
 
 				btn.MouseEnter:Connect(function()
-					TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(255, 255, 255) }):Play()
+					TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = THEME.accentHover }):Play()
 				end)
 				btn.MouseLeave:Connect(function()
 					TweenService:Create(btn, TweenInfo.new(0.15), { BackgroundColor3 = THEME.primary }):Play()
@@ -2821,7 +2831,7 @@ for _, c in ipairs(categories) do
 	b.Parent = categoryHolder
 	addCorner(b, 6)
 
-	-- Left Warm Amber indicator bar (inset 2px solid #e87f25)
+	-- Left accent indicator bar (unified accent color)
 	local ind = Instance.new("Frame")
 	ind.Name = "LeftIndicator"
 	ind.Position = UDim2.fromScale(0, 0)
@@ -3509,8 +3519,9 @@ local function styleSmallButton(button: TextButton, text: string, width: number,
 		end)
 	else
 		label.TextColor3 = THEME.bgWindow
+		bg.BackgroundColor3 = THEME.primary
 		local grad = addGradient(bg, Color3.fromRGB(255, 255, 255), Color3.fromRGB(224, 228, 235), 90)
-		local stroke = addStroke(bg, Color3.fromRGB(255, 255, 255), 1, 0.2)
+		local stroke = addStroke(bg, THEME.primary, 1, 0.2)
 
 		button.MouseEnter:Connect(function()
 			grad.Color = ColorSequence.new({
@@ -3540,7 +3551,7 @@ configStatus.Size = UDim2.new(1, -60, 0, 16)
 
 local function setConfigStatus(message: string, success: boolean?)
 	configStatus.Text = message
-	configStatus.TextColor3 = success == false and THEME.warmAmber or (success == true and THEME.brandTeal or THEME.textMuted)
+	configStatus.TextColor3 = success == false and Color3.fromRGB(245, 68, 68) or (success == true and THEME.brandTeal or THEME.textMuted)
 end
 
 -- Scrolling list for Settings (exact layout as moduleList)
@@ -3810,7 +3821,6 @@ refreshConfigList = function()
 		configList.Size = UDim2.new(1, -56, 1, -40)
 
 		local themeColors = {
-			{ name = "Warm Amber",   color = Color3.fromRGB(232, 127, 37), summary = "Classic Vape warm amber accent color" },
 			{ name = "Vape Teal",    color = Color3.fromRGB(0, 163, 124),   summary = "Vibrant emerald teal accent glow" },
 			{ name = "Electric Cyan",color = Color3.fromRGB(0, 192, 240),   summary = "Crisp neon cyan accent styling" },
 			{ name = "Royal Purple", color = Color3.fromRGB(138, 79, 255),  summary = "Deep royal purple neon accent tone" },
