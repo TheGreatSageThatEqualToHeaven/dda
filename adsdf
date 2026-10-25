@@ -1511,9 +1511,10 @@ local function updateScale()
 	local cam = workspace.CurrentCamera
 	if not cam then return end
 	local vp = cam.ViewportSize
-	local scaleX = (vp.X - 40) / 1200
-	local scaleY = (vp.Y - 40) / 740
-	uiScale.Scale = math.clamp(math.min(scaleX, scaleY), 0.60, 1.15)
+	local scaleX = (vp.X - 48) / 1180
+	local scaleY = (vp.Y - 48) / 720
+	local baseScale = math.min(scaleX, scaleY)
+	uiScale.Scale = math.clamp(baseScale, 0.55, 1.35)
 end
 updateScale()
 if workspace.CurrentCamera then
@@ -2935,7 +2936,7 @@ heroCard.BackgroundColor3 = Color3.fromRGB(14, 15, 20)
 heroCard.BackgroundTransparency = 0.15
 heroCard.ClipsDescendants = true
 heroCard.Parent = homePage
-addCorner(heroCard, 12)
+addCorner(heroCard, 16)
 addStroke(heroCard, Color3.fromRGB(255, 255, 255), 1, 0.88)
 
 local placeId = game.PlaceId
@@ -2996,7 +2997,7 @@ heroPad.Parent = heroContent
 
 local heroLeft = Instance.new("Frame")
 heroLeft.Name = "LeftStack"
-heroLeft.Size = UDim2.new(1, -95, 1, 0)
+heroLeft.Size = UDim2.new(1, 0, 1, 0)
 heroLeft.BackgroundTransparency = 1
 heroLeft.Parent = heroContent
 
@@ -3009,31 +3010,34 @@ heroLeftLayout.Parent = heroLeft
 local liveBadge = Instance.new("Frame")
 liveBadge.Name = "LiveBadge"
 liveBadge.LayoutOrder = 1
-liveBadge.Size = UDim2.fromOffset(160, 24)
-liveBadge.BackgroundColor3 = Color3.fromRGB(20, 24, 32)
-liveBadge.BackgroundTransparency = 0.3
+liveBadge.Size = UDim2.fromOffset(0, 24)
+liveBadge.AutomaticSize = Enum.AutomaticSize.X
+liveBadge.BackgroundColor3 = Color3.fromRGB(16, 20, 28)
+liveBadge.BackgroundTransparency = 0.25
 addCorner(liveBadge, 12)
-addStroke(liveBadge, Color3.fromRGB(255, 255, 255), 1, 0.88)
+addStroke(liveBadge, Color3.fromRGB(52, 211, 153), 1, 0.75)
 liveBadge.Parent = heroLeft
 
 local liveBadgeLayout = Instance.new("UIListLayout")
 liveBadgeLayout.FillDirection = Enum.FillDirection.Horizontal
 liveBadgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-liveBadgeLayout.Padding = UDim.new(0, 7)
+liveBadgeLayout.Padding = UDim.new(0, 6)
 liveBadgeLayout.Parent = liveBadge
 
 local liveBadgePad = Instance.new("UIPadding")
-liveBadgePad.PaddingLeft = UDim.new(0, 8)
+liveBadgePad.PaddingLeft = UDim.new(0, 10)
+liveBadgePad.PaddingRight = UDim.new(0, 10)
 liveBadgePad.Parent = liveBadge
 
 local liveDot = Instance.new("Frame")
-liveDot.Size = UDim2.fromOffset(7, 7)
+liveDot.Size = UDim2.fromOffset(6, 6)
 liveDot.BackgroundColor3 = Color3.fromRGB(52, 211, 153)
-addCorner(liveDot, 4)
+addCorner(liveDot, 3)
 liveDot.Parent = liveBadge
 
-local liveText = createLabel(liveBadge, "ACTIVE EXPERIENCE", 10, Color3.fromRGB(200, 205, 215), Enum.Font.GothamBold)
-liveText.Size = UDim2.fromOffset(130, 20)
+local liveText = createLabel(liveBadge, "ACTIVE EXPERIENCE", 10, Color3.fromRGB(220, 225, 235), Enum.Font.GothamBold)
+liveText.Size = UDim2.fromOffset(0, 20)
+liveText.AutomaticSize = Enum.AutomaticSize.X
 
 local heroTitle = createLabel(heroLeft, (game.Name and game.Name ~= "") and game.Name or "Roblox Experience", 22, THEME.textPrimary, Enum.Font.GothamBold)
 heroTitle.LayoutOrder = 2
@@ -3077,26 +3081,7 @@ createMetaPill(heroMeta, "Place: " .. tostring(placeId or 0))
 createMetaPill(heroMeta, "Job: " .. ((game.JobId and game.JobId ~= "") and (game.JobId:sub(1, 8) .. "...") or "Local Server"))
 local _, heroCreatorLbl = createMetaPill(heroMeta, "Roblox Experience")
 
-local iconBadge = Instance.new("Frame")
-iconBadge.Name = "IconBadge"
-iconBadge.AnchorPoint = Vector2.new(1, 0.5)
-iconBadge.Position = UDim2.new(1, 0, 0.5, 0)
-iconBadge.Size = UDim2.fromOffset(80, 80)
-iconBadge.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
-iconBadge.BackgroundTransparency = 0.25
-iconBadge.ClipsDescendants = true
-addCorner(iconBadge, 12)
-addStroke(iconBadge, Color3.fromRGB(255, 255, 255), 1, 0.85)
-iconBadge.Parent = heroContent
-
-local iconImg = Instance.new("ImageLabel")
-iconImg.Size = UDim2.fromScale(1, 1)
-iconImg.BackgroundTransparency = 1
-iconImg.Image = (placeId and placeId > 0)
-	and ("rbxthumb://type=GameIcon&id=" .. tostring(placeId) .. "&w=150&h=150")
-	or "rbxassetid://10723395457"
-iconImg.Parent = iconBadge
-addCorner(iconImg, 12)
+-- (Icon badge removed for clean modern typography layout)
 
 task.spawn(function()
 	if placeId and placeId > 0 then
