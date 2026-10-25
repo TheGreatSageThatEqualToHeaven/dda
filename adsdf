@@ -2100,7 +2100,7 @@ end
 --------------------------------------------------------------------------------
 -- DRAWER & MODULE RENDER LOGIC
 --------------------------------------------------------------------------------
-local selectedCategory = "Favorites"
+local selectedCategory = (categories and categories[1] and categories[1].id) or "Favorites"
 local selectedModule: ModuleItem? = nil
 local categoryButtons = {}
 local refreshModules: () -> ()
@@ -2869,6 +2869,17 @@ for _, c in ipairs(categories) do
 		updateCategories()
 		if drawer.Visible then closeDrawer() else refreshModules() end
 	end)
+end
+
+local function selectCategory(catId: string)
+	if not catId then return end
+	selectedCategory = catId
+	updateCategories()
+	if drawer and drawer.Visible then
+		closeDrawer()
+	elseif refreshModules then
+		refreshModules()
+	end
 end
 
 updateCategories()
@@ -3994,7 +4005,12 @@ switchTab = function(tabName: string)
 	if homePage then homePage.Visible = (tabName == "Home") end
 	if settingsPage then settingsPage.Visible = (tabName == "Settings") end
 
-	if tabName == "Settings" then
+	if tabName == "Modules" then
+		local firstCat = (categories and categories[1] and categories[1].id) or "Favorites"
+		if selectedCategory ~= firstCat then
+			selectCategory(firstCat)
+		end
+	elseif tabName == "Settings" then
 		refreshConfigList()
 	elseif tabName == "Home" then
 		pcall(updateHomeStats)
