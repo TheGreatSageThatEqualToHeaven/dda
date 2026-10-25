@@ -257,6 +257,7 @@ local ICONS = {
 	["wifi"]              = { url = "rbxassetid://10747382590", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["home"]              = { url = "rbxassetid://10723407389", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["x"]                 = { url = "rbxassetid://10747384394", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["trash"]             = { url = "rbxassetid://10747362393", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 }
 
 --------------------------------------------------------------------------------
@@ -4007,104 +4008,353 @@ refreshConfigList = function()
 			return
 		end
 
-		for _, name in ipairs(names) do
-			local isSelected = (activeConfigName == name)
+		-- Profile Drag-to-Delete Implementation
+		local renderProfileRows = function()
+			-- Clean up any prior drag drop-zone on settingsSpace
+			local oldDropZone = settingsSpace:FindFirstChild("ProfileDeleteDropZone")
+			if oldDropZone then oldDropZone:Destroy() end
 
-			local rowWrapper = Instance.new("Frame")
-			rowWrapper.Name = "ConfigWrapper_" .. name
-			rowWrapper.Size = UDim2.new(1, 0, 0, 68)
-			rowWrapper.BackgroundTransparency = 1
-			rowWrapper.ClipsDescendants = false
-			rowWrapper.Parent = configList
+			-- Professional floating bottom-middle delete drop zone
+			local dropZone = Instance.new("Frame")
+			dropZone.Name = "ProfileDeleteDropZone"
+			dropZone.AnchorPoint = Vector2.new(0.5, 1)
+			dropZone.Position = UDim2.new(0.5, 0, 1, 60) -- Starts hidden off-bottom
+			dropZone.Size = UDim2.fromOffset(260, 52)
+			dropZone.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+			dropZone.BackgroundTransparency = 0.08
+			dropZone.BorderSizePixel = 0
+			dropZone.ZIndex = 50
+			dropZone.Visible = false
+			dropZone.Parent = settingsSpace
+			addCorner(dropZone, 26)
 
-			local row = Instance.new("TextButton")
-			row.Name = "ConfigRow_" .. name
-			row.AutoButtonColor = false
-			row.Position = UDim2.fromOffset(0, 0)
-			row.Size = UDim2.new(1, 0, 1, 0)
-			row.BackgroundColor3 = isSelected and THEME.panelRaised or THEME.panelSoft
-			row.BorderSizePixel = 0
-			row.ClipsDescendants = false
-			row.Text = ""
-			row.Parent = rowWrapper
-			addCorner(row, 6)
-			addStroke(row, THEME.borderSubtle, 1, 0.4)
+			local dropZoneStroke = Instance.new("UIStroke")
+			dropZoneStroke.Thickness = 1.5
+			dropZoneStroke.Color = Color3.fromRGB(60, 62, 70)
+			dropZoneStroke.Transparency = 0.2
+			dropZoneStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			dropZoneStroke.Parent = dropZone
 
-			-- Left Accent Bar: 1:1 with module rows (white when equipped, accent track when unequipped)
-			local accentPill = Instance.new("Frame")
-			accentPill.Name = "AccentBar"
-			accentPill.Position = UDim2.fromScale(0, 0)
-			accentPill.Size = UDim2.new(0, 4, 1, 0)
-			accentPill.BackgroundColor3 = isSelected and THEME.primary or THEME.accent
-			accentPill.BorderSizePixel = 0
-			accentPill.ZIndex = 3
-			accentPill.Visible = true
-			accentPill.Parent = row
-			addCorner(accentPill, 2)
+			local dropGlow = Instance.new("ImageLabel")
+			dropGlow.Name = "Glow"
+			dropGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+			dropGlow.Position = UDim2.fromScale(0.5, 0.5)
+			dropGlow.Size = UDim2.new(1, 24, 1, 24)
+			dropGlow.BackgroundTransparency = 1
+			dropGlow.Image = "rbxassetid://8992230677"
+			dropGlow.ImageColor3 = Color3.fromRGB(255, 60, 60)
+			dropGlow.ImageTransparency = 1
+			dropGlow.ScaleType = Enum.ScaleType.Slice
+			dropGlow.SliceCenter = Rect.new(135, 135, 135, 135)
+			dropGlow.ZIndex = 49
+			dropGlow.Parent = dropZone
 
-			-- Title (15px bold, exactly matching module rows)
-			local title = createLabel(row, name, 15, isSelected and THEME.textPrimary or THEME.textSecondary, Enum.Font.GothamBold)
-			title.Position = UDim2.fromOffset(25, 0)
-			title.Size = UDim2.fromOffset(180, 68)
-			title.TextTruncate = Enum.TextTruncate.AtEnd
+			local dropIcon = createIcon(dropZone, "trash", 18, Color3.fromRGB(180, 182, 190))
+			dropIcon.AnchorPoint = Vector2.new(0, 0.5)
+			dropIcon.Position = UDim2.new(0, 20, 0.5, 0)
+			dropIcon.ZIndex = 51
 
-			-- Summary subtitle (12px #787a80)
-			local desc = createLabel(row, isSelected and "Active configuration profile" or "Custom configuration profile", 12, THEME.textMuted, Enum.Font.Gotham)
-			desc.Position = UDim2.fromOffset(210, 0)
-			desc.Size = UDim2.new(1, -380, 1, 0)
-			desc.TextTruncate = Enum.TextTruncate.AtEnd
+			local dropLabel = createLabel(dropZone, "Drag here to delete", 13, Color3.fromRGB(180, 182, 190), Enum.Font.GothamMedium)
+			dropLabel.Position = UDim2.fromOffset(46, 0)
+			dropLabel.Size = UDim2.new(1, -56, 1, 0)
+			dropLabel.TextXAlignment = Enum.TextXAlignment.Left
+			dropLabel.ZIndex = 51
 
-			local suppressRowSelect = false
+			local isOverDropZone = false
 
-			row.MouseEnter:Connect(function()
-				if not isSelected then
-					TweenService:Create(row, TweenInfo.new(0.2), { BackgroundColor3 = THEME.panelRaised }):Play()
+			local setDropZoneHover = function(hovered: boolean)
+				if isOverDropZone == hovered then return end
+				isOverDropZone = hovered
+				if hovered then
+					TweenService:Create(dropZone, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+						Size = UDim2.fromOffset(274, 56),
+						BackgroundColor3 = Color3.fromRGB(42, 14, 16),
+					}):Play()
+					TweenService:Create(dropZoneStroke, TweenInfo.new(0.18), {
+						Color = Color3.fromRGB(255, 55, 55),
+						Transparency = 0,
+						Thickness = 2,
+					}):Play()
+					TweenService:Create(dropGlow, TweenInfo.new(0.18), {
+						ImageTransparency = 0.25,
+					}):Play()
+					TweenService:Create(dropIcon, TweenInfo.new(0.18), {
+						ImageColor3 = Color3.fromRGB(255, 75, 75),
+						Size = UDim2.fromOffset(22, 22),
+					}):Play()
+					dropLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+					dropLabel.Text = "Release to delete profile"
+					dropLabel.Font = Enum.Font.GothamBold
+				else
+					TweenService:Create(dropZone, TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+						Size = UDim2.fromOffset(260, 52),
+						BackgroundColor3 = Color3.fromRGB(18, 18, 22),
+					}):Play()
+					TweenService:Create(dropZoneStroke, TweenInfo.new(0.18), {
+						Color = Color3.fromRGB(75, 78, 88),
+						Transparency = 0.2,
+						Thickness = 1.5,
+					}):Play()
+					TweenService:Create(dropGlow, TweenInfo.new(0.18), {
+						ImageTransparency = 1,
+					}):Play()
+					TweenService:Create(dropIcon, TweenInfo.new(0.18), {
+						ImageColor3 = Color3.fromRGB(180, 182, 190),
+						Size = UDim2.fromOffset(18, 18),
+					}):Play()
+					dropLabel.TextColor3 = Color3.fromRGB(180, 182, 190)
+					dropLabel.Text = "Drag here to delete"
+					dropLabel.Font = Enum.Font.GothamMedium
 				end
-			end)
-			row.MouseLeave:Connect(function()
-				if not isSelected then
-					TweenService:Create(row, TweenInfo.new(0.2), { BackgroundColor3 = THEME.panelSoft }):Play()
-				end
-			end)
+			end
 
-			row.Activated:Connect(function()
-				if suppressRowSelect then return end
-				activeConfigName = name
-				configName.Text = name
-				refreshConfigList()
-			end)
+			local showDropZone = function()
+				dropZone.Visible = true
+				setDropZoneHover(false)
+				TweenService:Create(dropZone, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+					Position = UDim2.new(0.5, 0, 1, -16),
+				}):Play()
+			end
 
-			local loadButton = createButton(row, "Load")
-			styleSmallButton(loadButton, "Load", 74, -92, false)
-			loadButton.Activated:Connect(function()
-				suppressRowSelect = true
-				task.delay(0.2, function() suppressRowSelect = false end)
-				local ok, message = loadNamedConfig(name)
-				setConfigStatus(message, ok)
-				if ok then
+			local hideDropZone = function()
+				local t = TweenService:Create(dropZone, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+					Position = UDim2.new(0.5, 0, 1, 60),
+				})
+				t:Play()
+				t.Completed:Connect(function()
+					if dropZone.Position.Y.Offset >= 50 then
+						dropZone.Visible = false
+					end
+				end)
+			end
+
+			for _, name in ipairs(names) do
+				local isSelected = (activeConfigName == name)
+
+				local rowWrapper = Instance.new("Frame")
+				rowWrapper.Name = "ConfigWrapper_" .. name
+				rowWrapper.Size = UDim2.new(1, 0, 0, 68)
+				rowWrapper.BackgroundTransparency = 1
+				rowWrapper.ClipsDescendants = false
+				rowWrapper.Parent = configList
+
+				local row = Instance.new("TextButton")
+				row.Name = "ConfigRow_" .. name
+				row.AutoButtonColor = false
+				row.Position = UDim2.fromOffset(0, 0)
+				row.Size = UDim2.new(1, 0, 1, 0)
+				row.BackgroundColor3 = isSelected and THEME.panelRaised or THEME.panelSoft
+				row.BorderSizePixel = 0
+				row.ClipsDescendants = false
+				row.Text = ""
+				row.Parent = rowWrapper
+				addCorner(row, 6)
+				local rowStroke = addStroke(row, THEME.borderSubtle, 1, 0.4)
+
+				-- Left Accent Bar: 1:1 with module rows
+				local accentPill = Instance.new("Frame")
+				accentPill.Name = "AccentBar"
+				accentPill.Position = UDim2.fromScale(0, 0)
+				accentPill.Size = UDim2.new(0, 4, 1, 0)
+				accentPill.BackgroundColor3 = isSelected and THEME.primary or THEME.accent
+				accentPill.BorderSizePixel = 0
+				accentPill.ZIndex = 3
+				accentPill.Visible = true
+				accentPill.Parent = row
+				addCorner(accentPill, 2)
+
+				-- Drag handle indicator on left
+				local dragIcon = createIcon(row, "ellipsis-vertical", 14, THEME.textMuted)
+				dragIcon.Position = UDim2.fromOffset(10, 27)
+				dragIcon.ImageTransparency = 0.5
+
+				-- Title (15px bold, matching module rows)
+				local title = createLabel(row, name, 15, isSelected and THEME.textPrimary or THEME.textSecondary, Enum.Font.GothamBold)
+				title.Position = UDim2.fromOffset(30, 0)
+				title.Size = UDim2.fromOffset(180, 68)
+				title.TextTruncate = Enum.TextTruncate.AtEnd
+
+				-- Summary subtitle with hold & drag hint
+				local desc = createLabel(row, isSelected and "Active profile • Hold & drag to delete" or "Hold & drag to delete", 12, THEME.textMuted, Enum.Font.Gotham)
+				desc.Position = UDim2.fromOffset(215, 0)
+				desc.Size = UDim2.new(1, -315, 1, 0)
+				desc.TextTruncate = Enum.TextTruncate.AtEnd
+
+				local loadButton = createButton(row, "Load")
+				styleSmallButton(loadButton, "Load", 74, -12, false)
+
+				local suppressRowSelect = false
+
+				row.MouseEnter:Connect(function()
+					if not isSelected then
+						TweenService:Create(row, TweenInfo.new(0.2), { BackgroundColor3 = THEME.panelRaised }):Play()
+						TweenService:Create(dragIcon, TweenInfo.new(0.2), { ImageTransparency = 0.2 }):Play()
+					end
+				end)
+				row.MouseLeave:Connect(function()
+					if not isSelected then
+						TweenService:Create(row, TweenInfo.new(0.2), { BackgroundColor3 = THEME.panelSoft }):Play()
+						TweenService:Create(dragIcon, TweenInfo.new(0.2), { ImageTransparency = 0.5 }):Play()
+					end
+				end)
+
+				row.Activated:Connect(function()
+					if suppressRowSelect then return end
 					activeConfigName = name
 					configName.Text = name
-					closeActiveDropdown()
-					if drawer.Visible then closeDrawer() end
-					if refreshModules then refreshModules() end
 					refreshConfigList()
-				end
-			end)
+				end)
 
-			local deleteButton = createButton(row, "Delete")
-			styleSmallButton(deleteButton, "Delete", 74, -10, true)
-			deleteButton.Activated:Connect(function()
-				suppressRowSelect = true
-				task.delay(0.2, function() suppressRowSelect = false end)
-				local ok, message = deleteNamedConfig(name)
-				setConfigStatus(message, ok)
-				if ok then
-					if activeConfigName == name then activeConfigName = nil end
-					if configName.Text == name then configName.Text = "" end
-					refreshConfigList()
+				loadButton.Activated:Connect(function()
+					suppressRowSelect = true
+					task.delay(0.2, function() suppressRowSelect = false end)
+					local ok, message = loadNamedConfig(name)
+					setConfigStatus(message, ok)
+					if ok then
+						activeConfigName = name
+						configName.Text = name
+						closeActiveDropdown()
+						if drawer.Visible then closeDrawer() end
+						if refreshModules then refreshModules() end
+						refreshConfigList()
+					end
+				end)
+
+				-- Hold & Drag Detection State
+				local dragConn = nil
+				local releaseConn = nil
+				local holdThread = nil
+				local isDragging = false
+				local dragGhost = nil
+
+				local cleanupDrag = function()
+					if holdThread then task.cancel(holdThread); holdThread = nil end
+					if dragConn then dragConn:Disconnect(); dragConn = nil end
+					if releaseConn then releaseConn:Disconnect(); releaseConn = nil end
+					hideDropZone()
+					if dragGhost then
+						dragGhost:Destroy()
+						dragGhost = nil
+					end
+					row.BackgroundTransparency = 0
+					row.Position = UDim2.fromOffset(0, 0)
+					isDragging = false
+					task.delay(0.25, function() suppressRowSelect = false end)
 				end
-			end)
+
+				row.MouseButton1Down:Connect(function()
+					local pressStartPos = UserInputService:GetMouseLocation()
+					local hasMoved = false
+
+					if holdThread then task.cancel(holdThread) end
+					holdThread = task.spawn(function()
+						task.wait(0.18) -- Hold threshold (180ms)
+						isDragging = true
+						suppressRowSelect = true
+
+						-- Create floating drag ghost
+						dragGhost = Instance.new("Frame")
+						dragGhost.Name = "DragGhost_" .. name
+						dragGhost.Size = UDim2.fromOffset(row.AbsoluteSize.X, row.AbsoluteSize.Y)
+						dragGhost.BackgroundColor3 = THEME.panelRaised
+						dragGhost.BackgroundTransparency = 0.25
+						dragGhost.BorderSizePixel = 0
+						dragGhost.ZIndex = 100
+						dragGhost.Parent = window
+						addCorner(dragGhost, 6)
+
+						local ghostStroke = addStroke(dragGhost, THEME.warmAmber, 1.5, 0.2)
+						local ghostLabel = createLabel(dragGhost, name, 15, Color3.fromRGB(255, 255, 255), Enum.Font.GothamBold)
+						ghostLabel.Position = UDim2.fromOffset(25, 0)
+						ghostLabel.Size = UDim2.new(1, -50, 1, 0)
+						ghostLabel.ZIndex = 101
+
+						local ghostIcon = createIcon(dragGhost, "trash", 18, Color3.fromRGB(255, 120, 120))
+						ghostIcon.AnchorPoint = Vector2.new(1, 0.5)
+						ghostIcon.Position = UDim2.new(1, -20, 0.5, 0)
+						ghostIcon.ZIndex = 101
+
+						local winPos = window.AbsolutePosition
+						local curMouse = UserInputService:GetMouseLocation()
+						dragGhost.Position = UDim2.fromOffset(curMouse.X - winPos.X - (dragGhost.AbsoluteSize.X / 2), curMouse.Y - winPos.Y - (dragGhost.AbsoluteSize.Y / 2))
+
+						-- Dim original row
+						row.BackgroundTransparency = 0.7
+
+						showDropZone()
+
+						dragConn = UserInputService.InputChanged:Connect(function(input)
+							if input.UserInputType == Enum.UserInputType.MouseMovement and dragGhost then
+								local mouseLoc = UserInputService:GetMouseLocation()
+								local relX = mouseLoc.X - winPos.X - (dragGhost.AbsoluteSize.X / 2)
+								local relY = mouseLoc.Y - winPos.Y - (dragGhost.AbsoluteSize.Y / 2)
+								dragGhost.Position = UDim2.fromOffset(relX, relY)
+
+								-- Check if mouse is hovering over drop zone
+								local dropAbsPos = dropZone.AbsolutePosition
+								local dropAbsSize = dropZone.AbsoluteSize
+								local inX = mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)
+								local inY = mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y)
+								setDropZoneHover(inX and inY)
+
+								if inX and inY then
+									ghostStroke.Color = Color3.fromRGB(255, 60, 60)
+								else
+									ghostStroke.Color = THEME.warmAmber
+								end
+							end
+						end)
+					end)
+
+					releaseConn = UserInputService.InputEnded:Connect(function(input)
+						if input.UserInputType == Enum.UserInputType.MouseButton1 then
+							if releaseConn then releaseConn:Disconnect(); releaseConn = nil end
+
+							if isDragging then
+								local mouseLoc = UserInputService:GetMouseLocation()
+								local dropAbsPos = dropZone.AbsolutePosition
+								local dropAbsSize = dropZone.AbsoluteSize
+								local inside = (mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)) and
+								               (mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y))
+
+								if inside then
+									-- Confirmed drag drop into delete zone!
+									local ok, message = deleteNamedConfig(name)
+									setConfigStatus(message or ("Deleted profile '" .. name .. "'"), ok)
+									if ok then
+										if activeConfigName == name then activeConfigName = nil end
+										if configName.Text == name then configName.Text = "" end
+									end
+									cleanupDrag()
+									refreshConfigList()
+									return
+								else
+									-- Animate snap back to original position
+									if dragGhost then
+										local startAbs = row.AbsolutePosition
+										local winAbs = window.AbsolutePosition
+										local targetX = startAbs.X - winAbs.X
+										local targetY = startAbs.Y - winAbs.Y
+										local snapTween = TweenService:Create(dragGhost, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+											Position = UDim2.fromOffset(targetX, targetY),
+											BackgroundTransparency = 1,
+										})
+										snapTween:Play()
+										task.delay(0.18, function()
+											cleanupDrag()
+										end)
+										return
+									end
+								end
+							end
+
+							cleanupDrag()
+						end
+					end)
+				end)
+			end
 		end
+		renderProfileRows()
 
 	elseif selectedSettingsCategory == "Themes" then
 		settingsActionBox.Visible = false
