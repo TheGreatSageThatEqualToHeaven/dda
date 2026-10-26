@@ -4061,7 +4061,6 @@ refreshConfigList = function()
 			dropLabel.ZIndex = 51
 
 			local isOverDropZone = false
-			local dropZoneReady = false
 
 			local setDropZoneHover = function(hovered: boolean)
 				if isOverDropZone == hovered then return end
@@ -4110,23 +4109,14 @@ refreshConfigList = function()
 			end
 
 			local showDropZone = function()
-				dropZoneReady = false
 				dropZone.Visible = true
 				setDropZoneHover(false)
-				local t = TweenService:Create(dropZone, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+				TweenService:Create(dropZone, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 					Position = UDim2.new(0.5, 0, 1, -16),
-				})
-				t:Play()
-				t.Completed:Connect(function(state)
-					if state == Enum.PlaybackState.Completed and dropZone.Visible then
-						dropZoneReady = true
-					end
-				end)
+				}):Play()
 			end
 
 			local hideDropZone = function()
-				dropZoneReady = false
-				setDropZoneHover(false)
 				local t = TweenService:Create(dropZone, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
 					Position = UDim2.new(0.5, 0, 1, 60),
 				})
@@ -4265,10 +4255,7 @@ refreshConfigList = function()
 						-- Create floating drag ghost
 						dragGhost = Instance.new("Frame")
 						dragGhost.Name = "DragGhost_" .. name
-						local dragScale = math.max(uiScale.Scale, 0.01)
-						local ghostWidth = row.AbsoluteSize.X / dragScale
-						local ghostHeight = row.AbsoluteSize.Y / dragScale
-						dragGhost.Size = UDim2.fromOffset(ghostWidth, ghostHeight)
+						dragGhost.Size = UDim2.fromOffset(row.AbsoluteSize.X, row.AbsoluteSize.Y)
 						dragGhost.BackgroundColor3 = THEME.panelRaised
 						dragGhost.BackgroundTransparency = 0.25
 						dragGhost.BorderSizePixel = 0
@@ -4289,35 +4276,32 @@ refreshConfigList = function()
 
 						local winPos = window.AbsolutePosition
 						local curMouse = UserInputService:GetMouseLocation()
-						dragGhost.Position = UDim2.fromOffset(
-							(curMouse.X - winPos.X) / dragScale - (ghostWidth / 2),
-							(curMouse.Y - winPos.Y) / dragScale - (ghostHeight / 2)
-						)
+						dragGhost.Position = UDim2.fromOffset(curMouse.X - winPos.X - (dragGhost.AbsoluteSize.X / 2), curMouse.Y - winPos.Y - (dragGhost.AbsoluteSize.Y / 2))
 
 						-- Dim original row
 						row.BackgroundTransparency = 0.7
 
 						showDropZone()
 
-						dragConn = RunService.RenderStepped:Connect(function()
-							if not dragGhost then return end
-							local mouseLoc = UserInputService:GetMouseLocation()
-							local currentScale = math.max(uiScale.Scale, 0.01)
-							local relX = (mouseLoc.X - window.AbsolutePosition.X) / currentScale - (ghostWidth / 2)
-							local relY = (mouseLoc.Y - window.AbsolutePosition.Y) / currentScale - (ghostHeight / 2)
-							dragGhost.Position = UDim2.fromOffset(relX, relY)
+						dragConn = UserInputService.InputChanged:Connect(function(input)
+							if input.UserInputType == Enum.UserInputType.MouseMovement and dragGhost then
+								local mouseLoc = UserInputService:GetMouseLocation()
+								local relX = mouseLoc.X - winPos.X - (dragGhost.AbsoluteSize.X / 2)
+								local relY = mouseLoc.Y - winPos.Y - (dragGhost.AbsoluteSize.Y / 2)
+								dragGhost.Position = UDim2.fromOffset(relX, relY)
 
-							-- Only highlight a fully revealed target under the actual pointer.
-							local dropAbsPos = dropZone.AbsolutePosition
-							local dropAbsSize = dropZone.AbsoluteSize
-							local inX = dropZoneReady and dropZone.Visible and mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)
-							local inY = dropZoneReady and dropZone.Visible and mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y)
-							setDropZoneHover(inX and inY)
+								-- Check if mouse is hovering over drop zone
+								local dropAbsPos = dropZone.AbsolutePosition
+								local dropAbsSize = dropZone.AbsoluteSize
+								local inX = mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)
+								local inY = mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y)
+								setDropZoneHover(inX and inY)
 
-							if inX and inY then
-								ghostStroke.Color = Color3.fromRGB(255, 60, 60)
-							else
-								ghostStroke.Color = THEME.warmAmber
+								if inX and inY then
+									ghostStroke.Color = Color3.fromRGB(255, 60, 60)
+								else
+									ghostStroke.Color = THEME.warmAmber
+								end
 							end
 						end)
 					end)
@@ -4330,9 +4314,8 @@ refreshConfigList = function()
 								local mouseLoc = UserInputService:GetMouseLocation()
 								local dropAbsPos = dropZone.AbsolutePosition
 								local dropAbsSize = dropZone.AbsoluteSize
-								local inside = dropZoneReady and dropZone.Visible
-									and mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)
-									and mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y)
+								local inside = (mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)) and
+								               (mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y))
 
 								if inside then
 									-- Confirmed drag drop into delete zone!
