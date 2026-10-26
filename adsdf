@@ -249,13 +249,13 @@ local ICONS = {
 	["crosshair"]         = { url = "rbxassetid://10709818534", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["shield"]            = { url = "rbxassetid://10734951847", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["box"]               = { url = "rbxassetid://10709782497", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
-	["zap"]               = { url = "rbxassetid://10734984447", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["zap"]               = { url = "rbxassetid://130551565616516", offset = Vector2.new(0, 0), size = Vector2.new(0, 0) },
 	["sparkles"]          = { url = "rbxassetid://10734962068", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["menu"]              = { url = "rbxassetid://10734887784", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["layers"]            = { url = "rbxassetid://10723424505", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["users"]             = { url = "rbxassetid://10747373426", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
-	["clock"]             = { url = "rbxassetid://10709791176", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
-	["wifi"]              = { url = "rbxassetid://10747382590", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["clock"]             = { url = "rbxassetid://10709805144", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["wifi"]              = { url = "rbxassetid://10747382504", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["home"]              = { url = "rbxassetid://10723407389", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["x"]                 = { url = "rbxassetid://10747384394", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["trash"]             = { url = "rbxassetid://10747362393", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
@@ -599,8 +599,12 @@ local function createIcon(parent: Instance, name: string, size: number, color: C
 	img.BackgroundTransparency = 1
 	img.Image = data.url
 	img.ImageColor3 = color or THEME.textPrimary
-	img.ImageRectOffset = data.offset
-	img.ImageRectSize = data.size
+	if data.offset and data.offset ~= Vector2.new(0, 0) then
+		img.ImageRectOffset = data.offset
+	end
+	if data.size and data.size ~= Vector2.new(0, 0) then
+		img.ImageRectSize = data.size
+	end
 	img.Parent = parent
 	return img
 end
@@ -3411,7 +3415,7 @@ do
 		header.Size = UDim2.new(1, -24, 0, 23)
 		header.BackgroundTransparency = 1
 		header.Parent = panel
-		local icon = createIcon(header, iconName, 14, THEME.accent)
+		local icon = createIcon(header, iconName, 14, THEME.textMuted)
 		icon.Position = UDim2.fromOffset(0, 4)
 		local heading = createLabel(header, title, 12, THEME.textPrimary, Enum.Font.GothamBold)
 		heading.Position = UDim2.fromOffset(22, 0)
