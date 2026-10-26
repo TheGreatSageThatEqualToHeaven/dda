@@ -67,6 +67,7 @@ gui.Parent = targetGuiParent
 -- ONE accent color drives every highlight: toggles, sliders, tabs, categories,
 -- badges, checkmarks, focus outlines, buttons and the loader bar.
 local ACCENT = Color3.fromRGB(0, 163, 124)
+local CUSTOM_CURSOR_ID = "rbxassetid://15659024331" -- Custom cursor texture ID
 
 local THEME = {
 	bgWindow       = Color3.fromRGB(10, 10, 13),       -- var(--card): #0a0a0d (deep obsidian)
@@ -1613,7 +1614,7 @@ local customCursor = (function()
 	local cursorContainer = Instance.new("Frame")
 	cursorContainer.Name = "CursorContainer"
 	cursorContainer.Size = UDim2.fromOffset(24, 24)
-	cursorContainer.AnchorPoint = Vector2.new(0, 0)
+	cursorContainer.AnchorPoint = Vector2.new(0.5, 0.5)
 	cursorContainer.BackgroundTransparency = 1
 	cursorContainer.BorderSizePixel = 0
 	cursorContainer.ZIndex = 2147483647
@@ -1623,7 +1624,7 @@ local customCursor = (function()
 	local cursorGlow = Instance.new("ImageLabel")
 	cursorGlow.Name = "CursorGlow"
 	cursorGlow.AnchorPoint = Vector2.new(0.5, 0.5)
-	cursorGlow.Position = UDim2.fromOffset(4, 4)
+	cursorGlow.Position = UDim2.fromScale(0.5, 0.5)
 	cursorGlow.Size = UDim2.fromOffset(34, 34)
 	cursorGlow.BackgroundTransparency = 1
 	cursorGlow.Image = "rbxassetid://8992230677"
@@ -1636,29 +1637,32 @@ local customCursor = (function()
 
 	local cursorShadow = Instance.new("ImageLabel")
 	cursorShadow.Name = "CursorShadow"
-	cursorShadow.Size = UDim2.fromOffset(22, 22)
-	cursorShadow.Position = UDim2.fromOffset(0, 0)
+	cursorShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorShadow.Size = UDim2.fromOffset(20, 20)
+	cursorShadow.Position = UDim2.new(0.5, 1, 0.5, 1)
 	cursorShadow.BackgroundTransparency = 1
-	cursorShadow.Image = "rbxassetid://6031091004"
+	cursorShadow.Image = CUSTOM_CURSOR_ID
 	cursorShadow.ImageColor3 = Color3.fromRGB(10, 10, 13)
-	cursorShadow.ImageTransparency = 0.15
+	cursorShadow.ImageTransparency = 0.25
 	cursorShadow.ZIndex = 2147483647
 	cursorShadow.Parent = cursorContainer
 
 	local cursorMain = Instance.new("ImageLabel")
 	cursorMain.Name = "CursorMain"
-	cursorMain.Size = UDim2.fromOffset(19, 19)
-	cursorMain.Position = UDim2.fromOffset(1, 1)
+	cursorMain.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorMain.Size = UDim2.fromOffset(20, 20)
+	cursorMain.Position = UDim2.fromScale(0.5, 0.5)
 	cursorMain.BackgroundTransparency = 1
-	cursorMain.Image = "rbxassetid://6031091004"
+	cursorMain.Image = CUSTOM_CURSOR_ID
 	cursorMain.ImageColor3 = ACCENT
 	cursorMain.ZIndex = 2147483648
 	cursorMain.Parent = cursorContainer
 
 	local cursorDot = Instance.new("Frame")
 	cursorDot.Name = "CursorDot"
-	cursorDot.Size = UDim2.fromOffset(3, 3)
-	cursorDot.Position = UDim2.fromOffset(4, 4)
+	cursorDot.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorDot.Size = UDim2.fromOffset(2, 2)
+	cursorDot.Position = UDim2.fromScale(0.5, 0.5)
 	cursorDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	cursorDot.BackgroundTransparency = 0.2
 	cursorDot.BorderSizePixel = 0
@@ -1674,7 +1678,10 @@ local customCursor = (function()
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorContainer.Visible then
 			TweenService:Create(cursorMain, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Size = UDim2.fromOffset(17, 17)
+				Size = UDim2.fromOffset(16, 16)
+			}):Play()
+			TweenService:Create(cursorShadow, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(16, 16)
 			}):Play()
 			TweenService:Create(cursorGlow, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.fromOffset(26, 26),
@@ -1686,7 +1693,10 @@ local customCursor = (function()
 	UserInputService.InputEnded:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorContainer.Visible then
 			TweenService:Create(cursorMain, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Size = UDim2.fromOffset(19, 19)
+				Size = UDim2.fromOffset(20, 20)
+			}):Play()
+			TweenService:Create(cursorShadow, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(20, 20)
 			}):Play()
 			TweenService:Create(cursorGlow, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.fromOffset(34, 34),
