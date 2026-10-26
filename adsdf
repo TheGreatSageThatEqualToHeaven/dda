@@ -4085,11 +4085,15 @@ refreshConfigList = function()
 				local inset = GuiServiceRef:GetGuiInset()
 				return m - inset
 			end
+			-- Let Roblox itself decide when the real mouse is over the pill.
+			-- MouseEnter/MouseLeave use the engine's own hit-testing, so no
+			-- top-bar / inset / scaling math can make it trigger from above.
+			local mouseReallyOver = false
+			dropZone.Active = false
+			dropZone.MouseEnter:Connect(function() mouseReallyOver = true end)
+			dropZone.MouseLeave:Connect(function() mouseReallyOver = false end)
 			local mouseInDropZone = function(): boolean
-				if not dropZone.Visible then return false end
-				local m = getGuiMouse()
-				local p, sz = dropZone.AbsolutePosition, dropZone.AbsoluteSize
-				return m.X >= p.X and m.X <= p.X + sz.X and m.Y >= p.Y and m.Y <= p.Y + sz.Y
+				return dropZone.Visible and mouseReallyOver
 			end
 
 			local setDropZoneHover = function(hovered: boolean)
@@ -4140,6 +4144,7 @@ refreshConfigList = function()
 
 			local showDropZone = function()
 				dropZone.Visible = true
+				mouseReallyOver = false
 				setDropZoneHover(false)
 				TweenService:Create(dropZone, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 					Position = UDim2.new(0.5, 0, 1, -16),
@@ -4290,6 +4295,7 @@ refreshConfigList = function()
 						dragGhost.BackgroundTransparency = 0.25
 						dragGhost.BorderSizePixel = 0
 						dragGhost.ZIndex = 100
+						dragGhost.Active = false
 						dragGhost.Parent = window
 						addCorner(dragGhost, 6)
 
