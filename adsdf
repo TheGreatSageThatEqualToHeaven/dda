@@ -10,7 +10,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
@@ -20,12 +19,6 @@ local StatsService = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
-
--- Normalize pointer coordinates to the same inset-free space used by this ScreenGui.
-local function getGuiPointerPosition(): Vector2
-	local inset = GuiService:GetGuiInset()
-	return UserInputService:GetMouseLocation() - inset
-end
 
 local function getTargetGuiParent(): Instance
 	if typeof(gethui) == "function" then
@@ -74,6 +67,7 @@ gui.Parent = targetGuiParent
 -- ONE accent color drives every highlight: toggles, sliders, tabs, categories,
 -- badges, checkmarks, focus outlines, buttons and the loader bar.
 local ACCENT = Color3.fromRGB(0, 163, 124)
+local CUSTOM_CURSOR_ID = "rbxassetid://15659024331" -- Custom cursor texture ID
 
 local THEME = {
 	bgWindow       = Color3.fromRGB(10, 10, 13),       -- var(--card): #0a0a0d (deep obsidian)
@@ -255,13 +249,13 @@ local ICONS = {
 	["crosshair"]         = { url = "rbxassetid://10709818534", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["shield"]            = { url = "rbxassetid://10734951847", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["box"]               = { url = "rbxassetid://10709782497", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
-	["zap"]               = { url = "rbxassetid://10734984447", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["zap"]               = { url = "rbxassetid://130551565616516", offset = Vector2.new(0, 0), size = Vector2.new(0, 0) },
 	["sparkles"]          = { url = "rbxassetid://10734962068", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["menu"]              = { url = "rbxassetid://10734887784", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["layers"]            = { url = "rbxassetid://10723424505", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["users"]             = { url = "rbxassetid://10747373426", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
-	["clock"]             = { url = "rbxassetid://10709791176", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
-	["wifi"]              = { url = "rbxassetid://10747382590", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["clock"]             = { url = "rbxassetid://10709805144", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["wifi"]              = { url = "rbxassetid://10747382504", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["home"]              = { url = "rbxassetid://10723407389", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["x"]                 = { url = "rbxassetid://10747384394", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["trash"]             = { url = "rbxassetid://10747362393", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
@@ -605,8 +599,12 @@ local function createIcon(parent: Instance, name: string, size: number, color: C
 	img.BackgroundTransparency = 1
 	img.Image = data.url
 	img.ImageColor3 = color or THEME.textPrimary
-	img.ImageRectOffset = data.offset
-	img.ImageRectSize = data.size
+	if data.offset and data.offset ~= Vector2.new(0, 0) then
+		img.ImageRectOffset = data.offset
+	end
+	if data.size and data.size ~= Vector2.new(0, 0) then
+		img.ImageRectSize = data.size
+	end
 	img.Parent = parent
 	return img
 end
@@ -1620,7 +1618,7 @@ local customCursor = (function()
 	local cursorContainer = Instance.new("Frame")
 	cursorContainer.Name = "CursorContainer"
 	cursorContainer.Size = UDim2.fromOffset(24, 24)
-	cursorContainer.AnchorPoint = Vector2.new(0, 0)
+	cursorContainer.AnchorPoint = Vector2.new(0.5, 0.5)
 	cursorContainer.BackgroundTransparency = 1
 	cursorContainer.BorderSizePixel = 0
 	cursorContainer.ZIndex = 2147483647
@@ -1630,7 +1628,7 @@ local customCursor = (function()
 	local cursorGlow = Instance.new("ImageLabel")
 	cursorGlow.Name = "CursorGlow"
 	cursorGlow.AnchorPoint = Vector2.new(0.5, 0.5)
-	cursorGlow.Position = UDim2.fromOffset(4, 4)
+	cursorGlow.Position = UDim2.fromScale(0.5, 0.5)
 	cursorGlow.Size = UDim2.fromOffset(34, 34)
 	cursorGlow.BackgroundTransparency = 1
 	cursorGlow.Image = "rbxassetid://8992230677"
@@ -1643,29 +1641,32 @@ local customCursor = (function()
 
 	local cursorShadow = Instance.new("ImageLabel")
 	cursorShadow.Name = "CursorShadow"
-	cursorShadow.Size = UDim2.fromOffset(22, 22)
-	cursorShadow.Position = UDim2.fromOffset(0, 0)
+	cursorShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorShadow.Size = UDim2.fromOffset(20, 20)
+	cursorShadow.Position = UDim2.new(0.5, 1, 0.5, 1)
 	cursorShadow.BackgroundTransparency = 1
-	cursorShadow.Image = "rbxassetid://6031091004"
+	cursorShadow.Image = CUSTOM_CURSOR_ID
 	cursorShadow.ImageColor3 = Color3.fromRGB(10, 10, 13)
-	cursorShadow.ImageTransparency = 0.15
+	cursorShadow.ImageTransparency = 0.25
 	cursorShadow.ZIndex = 2147483647
 	cursorShadow.Parent = cursorContainer
 
 	local cursorMain = Instance.new("ImageLabel")
 	cursorMain.Name = "CursorMain"
-	cursorMain.Size = UDim2.fromOffset(19, 19)
-	cursorMain.Position = UDim2.fromOffset(1, 1)
+	cursorMain.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorMain.Size = UDim2.fromOffset(20, 20)
+	cursorMain.Position = UDim2.fromScale(0.5, 0.5)
 	cursorMain.BackgroundTransparency = 1
-	cursorMain.Image = "rbxassetid://6031091004"
+	cursorMain.Image = CUSTOM_CURSOR_ID
 	cursorMain.ImageColor3 = ACCENT
 	cursorMain.ZIndex = 2147483648
 	cursorMain.Parent = cursorContainer
 
 	local cursorDot = Instance.new("Frame")
 	cursorDot.Name = "CursorDot"
-	cursorDot.Size = UDim2.fromOffset(3, 3)
-	cursorDot.Position = UDim2.fromOffset(4, 4)
+	cursorDot.AnchorPoint = Vector2.new(0.5, 0.5)
+	cursorDot.Size = UDim2.fromOffset(2, 2)
+	cursorDot.Position = UDim2.fromScale(0.5, 0.5)
 	cursorDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	cursorDot.BackgroundTransparency = 0.2
 	cursorDot.BorderSizePixel = 0
@@ -1681,7 +1682,10 @@ local customCursor = (function()
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorContainer.Visible then
 			TweenService:Create(cursorMain, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Size = UDim2.fromOffset(17, 17)
+				Size = UDim2.fromOffset(16, 16)
+			}):Play()
+			TweenService:Create(cursorShadow, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(16, 16)
 			}):Play()
 			TweenService:Create(cursorGlow, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.fromOffset(26, 26),
@@ -1693,7 +1697,10 @@ local customCursor = (function()
 	UserInputService.InputEnded:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 and cursorContainer.Visible then
 			TweenService:Create(cursorMain, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Size = UDim2.fromOffset(19, 19)
+				Size = UDim2.fromOffset(20, 20)
+			}):Play()
+			TweenService:Create(cursorShadow, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.fromOffset(20, 20)
 			}):Play()
 			TweenService:Create(cursorGlow, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.fromOffset(34, 34),
@@ -1729,7 +1736,7 @@ local function setInterfaceActive(active: boolean)
                 end
                 UserInputService.OverrideMouseIconBehavior = Enum.OverrideMouseIconBehavior.None
                 customCursor.setVisible(true)
-                customCursor.updatePosition(getGuiPointerPosition())
+                customCursor.updatePosition(UserInputService:GetMouseLocation())
             else
                 customCursor.setVisible(false)
             end
@@ -3408,7 +3415,7 @@ do
 		header.Size = UDim2.new(1, -24, 0, 23)
 		header.BackgroundTransparency = 1
 		header.Parent = panel
-		local icon = createIcon(header, iconName, 14, THEME.accent)
+		local icon = createIcon(header, iconName, 14, THEME.textMuted)
 		icon.Position = UDim2.fromOffset(0, 4)
 		local heading = createLabel(header, title, 12, THEME.textPrimary, Enum.Font.GothamBold)
 		heading.Position = UDim2.fromOffset(22, 0)
@@ -4042,19 +4049,18 @@ refreshConfigList = function()
 			dropZoneStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 			dropZoneStroke.Parent = dropZone
 
-			local dropGlow = Instance.new("ImageLabel")
+			-- Uniform symmetric halo (rounded frame, no 9-slice image distortion)
+			local dropGlow = Instance.new("Frame")
 			dropGlow.Name = "Glow"
 			dropGlow.AnchorPoint = Vector2.new(0.5, 0.5)
 			dropGlow.Position = UDim2.fromScale(0.5, 0.5)
-			dropGlow.Size = UDim2.new(1, 24, 1, 24)
+			dropGlow.Size = UDim2.new(1, 12, 1, 12)
+			dropGlow.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
 			dropGlow.BackgroundTransparency = 1
-			dropGlow.Image = "rbxassetid://8992230677"
-			dropGlow.ImageColor3 = Color3.fromRGB(255, 60, 60)
-			dropGlow.ImageTransparency = 1
-			dropGlow.ScaleType = Enum.ScaleType.Slice
-			dropGlow.SliceCenter = Rect.new(135, 135, 135, 135)
+			dropGlow.BorderSizePixel = 0
 			dropGlow.ZIndex = 49
 			dropGlow.Parent = dropZone
+			addCorner(dropGlow, 32)
 
 			local dropIcon = createIcon(dropZone, "trash", 18, Color3.fromRGB(180, 182, 190))
 			dropIcon.AnchorPoint = Vector2.new(0, 0.5)
@@ -4068,6 +4074,23 @@ refreshConfigList = function()
 			dropLabel.ZIndex = 51
 
 			local isOverDropZone = false
+
+			-- Accurate hit-test: GetMouseLocation() includes the GUI top-bar inset,
+			-- AbsolutePosition does not, so convert the mouse into GUI space first.
+			local GuiServiceRef = game:GetService("GuiService")
+			local getGuiMouse = function(): Vector2
+				local m = UserInputService:GetMouseLocation()
+				local gui = settingsSpace:FindFirstAncestorWhichIsA("ScreenGui")
+				if gui and gui.IgnoreGuiInset then return m end
+				local inset = GuiServiceRef:GetGuiInset()
+				return m - inset
+			end
+			local mouseInDropZone = function(): boolean
+				if not dropZone.Visible then return false end
+				local m = getGuiMouse()
+				local p, sz = dropZone.AbsolutePosition, dropZone.AbsoluteSize
+				return m.X >= p.X and m.X <= p.X + sz.X and m.Y >= p.Y and m.Y <= p.Y + sz.Y
+			end
 
 			local setDropZoneHover = function(hovered: boolean)
 				if isOverDropZone == hovered then return end
@@ -4083,7 +4106,7 @@ refreshConfigList = function()
 						Thickness = 2,
 					}):Play()
 					TweenService:Create(dropGlow, TweenInfo.new(0.18), {
-						ImageTransparency = 0.25,
+						BackgroundTransparency = 0.82,
 					}):Play()
 					TweenService:Create(dropIcon, TweenInfo.new(0.18), {
 						ImageColor3 = Color3.fromRGB(255, 75, 75),
@@ -4103,7 +4126,7 @@ refreshConfigList = function()
 						Thickness = 1.5,
 					}):Play()
 					TweenService:Create(dropGlow, TweenInfo.new(0.18), {
-						ImageTransparency = 1,
+						BackgroundTransparency = 1,
 					}):Play()
 					TweenService:Create(dropIcon, TweenInfo.new(0.18), {
 						ImageColor3 = Color3.fromRGB(180, 182, 190),
@@ -4250,7 +4273,7 @@ refreshConfigList = function()
 				end
 
 				row.MouseButton1Down:Connect(function()
-					local pressStartPos = getGuiPointerPosition()
+					local pressStartPos = UserInputService:GetMouseLocation()
 					local hasMoved = false
 
 					if holdThread then task.cancel(holdThread) end
@@ -4281,9 +4304,15 @@ refreshConfigList = function()
 						ghostIcon.Position = UDim2.new(1, -20, 0.5, 0)
 						ghostIcon.ZIndex = 101
 
+						dragGhost.AnchorPoint = Vector2.new(0.5, 0.5)
 						local winPos = window.AbsolutePosition
-						local curMouse = getGuiPointerPosition()
-						dragGhost.Position = UDim2.fromOffset(curMouse.X - winPos.X - (dragGhost.AbsoluteSize.X / 2), curMouse.Y - winPos.Y - (dragGhost.AbsoluteSize.Y / 2))
+						local curMouse = getGuiMouse()
+						dragGhost.Position = UDim2.fromOffset(curMouse.X - winPos.X, curMouse.Y - winPos.Y)
+						-- Symmetric shrink from both left and right toward the cursor
+						local ghostW = math.clamp(row.AbsoluteSize.X * 0.45, 180, 260)
+						TweenService:Create(dragGhost, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+							Size = UDim2.fromOffset(ghostW, 44),
+						}):Play()
 
 						-- Dim original row
 						row.BackgroundTransparency = 0.7
@@ -4292,19 +4321,15 @@ refreshConfigList = function()
 
 						dragConn = UserInputService.InputChanged:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement and dragGhost then
-								local mouseLoc = getGuiPointerPosition()
-								local relX = mouseLoc.X - winPos.X - (dragGhost.AbsoluteSize.X / 2)
-								local relY = mouseLoc.Y - winPos.Y - (dragGhost.AbsoluteSize.Y / 2)
-								dragGhost.Position = UDim2.fromOffset(relX, relY)
+								local mouseLoc = getGuiMouse()
+								local wp = window.AbsolutePosition
+								dragGhost.Position = UDim2.fromOffset(mouseLoc.X - wp.X, mouseLoc.Y - wp.Y)
 
 								-- Check if mouse is hovering over drop zone
-								local dropAbsPos = dropZone.AbsolutePosition
-								local dropAbsSize = dropZone.AbsoluteSize
-								local inX = mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)
-								local inY = mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y)
-								setDropZoneHover(inX and inY)
+								local over = mouseInDropZone()
+								setDropZoneHover(over)
 
-								if inX and inY then
+								if over then
 									ghostStroke.Color = Color3.fromRGB(255, 60, 60)
 								else
 									ghostStroke.Color = THEME.warmAmber
@@ -4318,18 +4343,9 @@ refreshConfigList = function()
 							if releaseConn then releaseConn:Disconnect(); releaseConn = nil end
 
 							if isDragging then
-								local mouseLoc = getGuiPointerPosition()
-								local dropAbsPos = dropZone.AbsolutePosition
-								local dropAbsSize = dropZone.AbsoluteSize
-								local inside = dropZone.Visible
-									and mouseLoc.X >= dropAbsPos.X and mouseLoc.X <= (dropAbsPos.X + dropAbsSize.X)
-									and mouseLoc.Y >= dropAbsPos.Y and mouseLoc.Y <= (dropAbsPos.Y + dropAbsSize.Y)
-								-- A hold or click alone must never delete a profile. Require a real drag
-								-- away from the row and confirm the pointer is still inside the visible target.
-								local dragDistance = (mouseLoc - pressStartPos).Magnitude
-								local intentionalDrag = dragDistance >= 24
+								local inside = mouseInDropZone() and isOverDropZone
 
-								if inside and intentionalDrag and isOverDropZone then
+								if inside then
 									-- Confirmed drag drop into delete zone!
 									local ok, message = deleteNamedConfig(name)
 									setConfigStatus(message or ("Deleted profile '" .. name .. "'"), ok)
@@ -4345,10 +4361,11 @@ refreshConfigList = function()
 									if dragGhost then
 										local startAbs = row.AbsolutePosition
 										local winAbs = window.AbsolutePosition
-										local targetX = startAbs.X - winAbs.X
-										local targetY = startAbs.Y - winAbs.Y
+										local targetX = startAbs.X - winAbs.X + row.AbsoluteSize.X / 2
+										local targetY = startAbs.Y - winAbs.Y + row.AbsoluteSize.Y / 2
 										local snapTween = TweenService:Create(dragGhost, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 											Position = UDim2.fromOffset(targetX, targetY),
+											Size = UDim2.fromOffset(row.AbsoluteSize.X, row.AbsoluteSize.Y),
 											BackgroundTransparency = 1,
 										})
 										snapTween:Play()
@@ -4970,7 +4987,7 @@ do
 		if input.UserInputType == Enum.UserInputType.Touch then
 			return Vector2.new(input.Position.X, input.Position.Y)
 		else
-			return getGuiPointerPosition()
+			return UserInputService:GetMouseLocation()
 		end
 	end
 
