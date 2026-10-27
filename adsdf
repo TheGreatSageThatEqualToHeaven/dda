@@ -4,7 +4,7 @@
     
     Installation:
     Place this script inside StarterPlayer > StarterPlayerScripts as a LocalScript.
-    Press Right Shift to toggle interface visibility.
+    Press Right Alt to toggle interface visibility.
 ]]
 
 local Players = game:GetService("Players")
@@ -4519,7 +4519,7 @@ refreshConfigList = function()
 		configList.Size = UDim2.new(1, -56, 1, -40)
 
 		local genOptions = {
-			{ name = "Right Shift Keybind", summary = "Primary keyboard shortcut to toggle window visibility", btn = "RightShift" },
+			{ name = "Right Alt Keybind", summary = "Primary keyboard shortcut to toggle window visibility", btn = "RightAlt" },
 			{ name = "Unload UI", summary = "Cleanly disconnects and removes the user interface from ScreenGui", btn = "Unload", dest = true },
 		}
 
@@ -5052,11 +5052,11 @@ do
 end
 
 --------------------------------------------------------------------------------
--- KEYBOARD SHORTCUT (Right Shift toggle + module hotkeys)
+-- KEYBOARD SHORTCUT (Right Alt toggle + module hotkeys)
 --------------------------------------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end
-	if input.KeyCode == Enum.KeyCode.RightShift then
+	if input.KeyCode == Enum.KeyCode.RightAlt then
 		if scalerRoot.Visible then
 			scalerRoot.Visible = false
 			setInterfaceActive(false)
