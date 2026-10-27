@@ -4110,11 +4110,15 @@ refreshConfigList = function()
 			dropZone.Active = false
 			dropZone.MouseEnter:Connect(function() mouseReallyOver = true end)
 			dropZone.MouseLeave:Connect(function() mouseReallyOver = false end)
+			-- Hit-test using the dragged card itself (what you actually see on screen),
+			-- so it can never trigger while the card is visually above the bin.
+			local activeGhost = nil
 			local mouseInDropZone = function(): boolean
-				if not dropZone.Visible then return false end
-				local m = getGuiMouse()
+				if not dropZone.Visible or not activeGhost or not activeGhost.Parent then return false end
+				local gp, gs = activeGhost.AbsolutePosition, activeGhost.AbsoluteSize
+				local c = gp + gs / 2
 				local p, s = dropZone.AbsolutePosition, dropZone.AbsoluteSize
-				return m.X >= p.X and m.X <= p.X + s.X and m.Y >= p.Y and m.Y <= p.Y + s.Y
+				return c.X >= p.X and c.X <= p.X + s.X and c.Y >= p.Y and c.Y <= p.Y + s.Y
 			end
 
 			local setDropZoneHover = function(hovered: boolean)
@@ -4318,6 +4322,7 @@ refreshConfigList = function()
 						dragGhost.ZIndex = 100
 						dragGhost.Active = false
 						dragGhost.Parent = gui
+						activeGhost = dragGhost
 						addCorner(dragGhost, 6)
 
 						local ghostStroke = addStroke(dragGhost, THEME.warmAmber, 1.5, 0.2)
@@ -4336,7 +4341,7 @@ refreshConfigList = function()
 						local grab = pressStartPos
 						if not gui.IgnoreGuiInset then grab = grab - game:GetService("GuiService"):GetGuiInset() end
 						local ax = math.clamp((grab.X - rowAbs.X) / math.max(rowSize.X, 1), 0.08, 0.92)
-						local ay = math.clamp((grab.Y - rowAbs.Y) / math.max(rowSize.Y, 1), 0, 1)
+						local ay = 0.5 -- keep card vertically centered on the cursor
 						dragGhost.AnchorPoint = Vector2.new(ax, ay)
 						local curMouse = getGuiMouse()
 						local ghostPos = curMouse
