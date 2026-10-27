@@ -277,6 +277,10 @@ local ICONS = {
 	["home"]              = { url = "rbxassetid://10723407389", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["x"]                 = { url = "rbxassetid://10747384394", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 	["trash"]             = { url = "rbxassetid://10747362393", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["message-circle"]    = { url = "rbxassetid://10723376114", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["youtube"]           = { url = "rbxassetid://10747381992", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["copy"]              = { url = "rbxassetid://10709812159", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
+	["check"]             = { url = "rbxassetid://10709790644", offset = Vector2.new(0, 0), size = Vector2.new(256, 256) },
 }
 
 --------------------------------------------------------------------------------
@@ -3459,16 +3463,64 @@ do
 		return button
 	end
 
-	local actionsPanel = makePanel("QuickActionsPanel", "Quick actions", "zap", 1)
-	makeAction(actionsPanel, "OpenModulesAction", "Browse modules", UDim2.fromOffset(12, 48), UDim2.new(0.5, -18, 0, 31), function()
-		if switchTab then switchTab("Modules") end
-	end)
-	makeAction(actionsPanel, "OpenSettingsAction", "Settings & profiles", UDim2.new(0.5, 6, 0, 48), UDim2.new(0.5, -18, 0, 31), function()
-		if switchTab then switchTab("Settings") end
-	end)
-	makeAction(actionsPanel, "OpenModulesActionWide", "Open module library", UDim2.fromOffset(12, 85), UDim2.new(1, -24, 0, 31), function()
-		if switchTab then switchTab("Modules") end
-	end)
+	-- Community links (click to copy). Replace the placeholder text with real links.
+	local COMMUNITY_LINKS = {
+		{ id = "Discord", label = "Discord server", icon = "message-circle", link = "https://discord.gg/your-invite", color = Color3.fromRGB(88, 101, 242) },
+		{ id = "YouTube", label = "YouTube", icon = "youtube", link = "https://youtube.com/@your-channel", color = Color3.fromRGB(255, 48, 64) },
+	}
+	local copyToClipboard = function(text: string): boolean
+		local fn = (typeof(setclipboard) == "function" and setclipboard)
+			or (typeof(toclipboard) == "function" and toclipboard)
+			or (typeof(set_clipboard) == "function" and set_clipboard)
+		if not fn then return false end
+		return (pcall(fn, text))
+	end
+
+	local actionsPanel = makePanel("CommunityPanel", "Community", "users", 1)
+	for i, info in ipairs(COMMUNITY_LINKS) do
+		local btn = makeAction(actionsPanel, info.id .. "LinkAction", "", UDim2.fromOffset(12, 48 + (i - 1) * 37), UDim2.new(1, -24, 0, 31), function() end)
+		btn.Text = ""
+		btn.ClipsDescendants = true
+
+		local brand = createIcon(btn, info.icon, 16, info.color)
+		brand.AnchorPoint = Vector2.new(0, 0.5)
+		brand.Position = UDim2.new(0, 10, 0.5, 0)
+		brand.ZIndex = btn.ZIndex + 1
+
+		local text = createLabel(btn, info.label, 12, THEME.textPrimary, Enum.Font.GothamMedium)
+		text.Position = UDim2.fromOffset(34, 0)
+		text.Size = UDim2.new(1, -70, 1, 0)
+		text.TextXAlignment = Enum.TextXAlignment.Left
+		text.ZIndex = btn.ZIndex + 1
+
+		local copyIcon = createIcon(btn, "copy", 14, THEME.textMuted)
+		copyIcon.AnchorPoint = Vector2.new(1, 0.5)
+		copyIcon.Position = UDim2.new(1, -10, 0.5, 0)
+		copyIcon.ZIndex = btn.ZIndex + 1
+
+		local busy = false
+		btn.Activated:Connect(function()
+			if busy then return end
+			busy = true
+			local ok = copyToClipboard(info.link)
+			text.Text = ok and "Link copied!" or "Copy not supported"
+			text.TextColor3 = ok and Color3.fromRGB(80, 220, 140) or Color3.fromRGB(255, 110, 110)
+			if ok then
+				local ic = ICONS and ICONS["check"]
+				if ic then copyIcon.Image = ic.url end
+				copyIcon.ImageColor3 = Color3.fromRGB(80, 220, 140)
+			end
+			task.delay(1.6, function()
+				if not btn.Parent then return end
+				text.Text = info.label
+				text.TextColor3 = THEME.textPrimary
+				local ic = ICONS and ICONS["copy"]
+				if ic then copyIcon.Image = ic.url end
+				copyIcon.ImageColor3 = THEME.textMuted
+				busy = false
+			end)
+		end)
+	end
 
 	local statusPanel = makePanel("StatusPanel", "Status", "clock", 2)
 	local statusGrid = Instance.new("Frame")
