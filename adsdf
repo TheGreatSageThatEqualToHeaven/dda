@@ -8,7 +8,25 @@
 ]]
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local smoothAnimationsEnabled = true
+local _RealTweenService = game:GetService("TweenService")
+-- Proxy so the "Smooth Animations" setting affects every tween in the UI
+local TweenService = setmetatable({
+	Create = function(_, inst, info, props)
+		if not smoothAnimationsEnabled then
+			info = TweenInfo.new(0)
+		end
+		return _RealTweenService:Create(inst, info, props)
+	end,
+}, {
+	__index = function(_, k)
+		local v = _RealTweenService[k]
+		if type(v) == "function" then
+			return function(_, ...) return v(_RealTweenService, ...) end
+		end
+		return v
+	end,
+})
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
@@ -4093,7 +4111,10 @@ refreshConfigList = function()
 			dropZone.MouseEnter:Connect(function() mouseReallyOver = true end)
 			dropZone.MouseLeave:Connect(function() mouseReallyOver = false end)
 			local mouseInDropZone = function(): boolean
-				return dropZone.Visible and mouseReallyOver
+				if not dropZone.Visible then return false end
+				local m = getGuiMouse()
+				local p, s = dropZone.AbsolutePosition, dropZone.AbsoluteSize
+				return m.X >= p.X and m.X <= p.X + s.X and m.Y >= p.Y and m.Y <= p.Y + s.Y
 			end
 
 			local setDropZoneHover = function(hovered: boolean)
@@ -4296,7 +4317,7 @@ refreshConfigList = function()
 						dragGhost.BorderSizePixel = 0
 						dragGhost.ZIndex = 100
 						dragGhost.Active = false
-						dragGhost.Parent = window
+						dragGhost.Parent = gui
 						addCorner(dragGhost, 6)
 
 						local ghostStroke = addStroke(dragGhost, THEME.warmAmber, 1.5, 0.2)
@@ -4310,10 +4331,16 @@ refreshConfigList = function()
 						ghostIcon.Position = UDim2.new(1, -20, 0.5, 0)
 						ghostIcon.ZIndex = 101
 
-						dragGhost.AnchorPoint = Vector2.new(0.5, 0.5)
-						local winPos = window.AbsolutePosition
+						-- Keep the exact point that was grabbed under the cursor
+						local rowAbs, rowSize = row.AbsolutePosition, row.AbsoluteSize
+						local grab = pressStartPos
+						if not gui.IgnoreGuiInset then grab = grab - game:GetService("GuiService"):GetGuiInset() end
+						local ax = math.clamp((grab.X - rowAbs.X) / math.max(rowSize.X, 1), 0.08, 0.92)
+						local ay = math.clamp((grab.Y - rowAbs.Y) / math.max(rowSize.Y, 1), 0, 1)
+						dragGhost.AnchorPoint = Vector2.new(ax, ay)
 						local curMouse = getGuiMouse()
-						dragGhost.Position = UDim2.fromOffset(curMouse.X - winPos.X, curMouse.Y - winPos.Y)
+						local ghostPos = curMouse
+						dragGhost.Position = UDim2.fromOffset(curMouse.X, curMouse.Y)
 						-- Symmetric shrink from both left and right toward the cursor
 						local ghostW = math.clamp(row.AbsoluteSize.X * 0.45, 180, 260)
 						TweenService:Create(dragGhost, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
@@ -4325,11 +4352,12 @@ refreshConfigList = function()
 
 						showDropZone()
 
-						dragConn = UserInputService.InputChanged:Connect(function(input)
-							if input.UserInputType == Enum.UserInputType.MouseMovement and dragGhost then
+						dragConn = RunService.RenderStepped:Connect(function(dt)
+							if dragGhost then
 								local mouseLoc = getGuiMouse()
-								local wp = window.AbsolutePosition
-								dragGhost.Position = UDim2.fromOffset(mouseLoc.X - wp.X, mouseLoc.Y - wp.Y)
+								local alpha = smoothAnimationsEnabled and (1 - math.exp(-dt * 28)) or 1
+								ghostPos = ghostPos:Lerp(mouseLoc, alpha)
+								dragGhost.Position = UDim2.fromOffset(math.floor(ghostPos.X + 0.5), math.floor(ghostPos.Y + 0.5))
 
 								-- Check if mouse is hovering over drop zone
 								local over = mouseInDropZone()
@@ -4365,10 +4393,11 @@ refreshConfigList = function()
 								else
 									-- Animate snap back to original position
 									if dragGhost then
+										if dragConn then dragConn:Disconnect(); dragConn = nil end
 										local startAbs = row.AbsolutePosition
-										local winAbs = window.AbsolutePosition
-										local targetX = startAbs.X - winAbs.X + row.AbsoluteSize.X / 2
-										local targetY = startAbs.Y - winAbs.Y + row.AbsoluteSize.Y / 2
+										local ap = dragGhost.AnchorPoint
+										local targetX = startAbs.X + row.AbsoluteSize.X * ap.X
+										local targetY = startAbs.Y + row.AbsoluteSize.Y * ap.Y
 										local snapTween = TweenService:Create(dragGhost, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 											Position = UDim2.fromOffset(targetX, targetY),
 											Size = UDim2.fromOffset(row.AbsoluteSize.X, row.AbsoluteSize.Y),
@@ -4463,8 +4492,8 @@ refreshConfigList = function()
 		configList.Size = UDim2.new(1, -56, 1, -40)
 
 		local uiOptions = {
-			{ name = "Acrylic Blur", summary = "Realistic frosted glass blur behind the interface window", kind = "toggle", enabled = true },
-			{ name = "Smooth Animations", summary = "Smooth transition tweens for drawers and tab switches", kind = "toggle", enabled = true },
+			{ name = "Acrylic Blur", summary = "Realistic frosted glass blur behind the interface window", kind = "toggle", enabled = acrylicBlurEnabled },
+			{ name = "Smooth Animations", summary = "Smooth transition tweens for drawers and tab switches", kind = "toggle", enabled = smoothAnimationsEnabled },
 			{ name = "Interface Sizing", summary = "Scale factor multiplier for all window elements", kind = "info" },
 		}
 
@@ -4508,6 +4537,12 @@ refreshConfigList = function()
 
 				createToggle(toggleHolder, opt.enabled, function(val)
 					opt.enabled = val
+					if opt.name == "Acrylic Blur" then
+						acrylicBlurEnabled = val
+						updateAcrylicBlur(true)
+					elseif opt.name == "Smooth Animations" then
+						smoothAnimationsEnabled = val
+					end
 					accentPill.BackgroundColor3 = val and THEME.primary or THEME.accent
 				end)
 			end
