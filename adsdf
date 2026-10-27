@@ -2253,7 +2253,7 @@ searchInput.TextXAlignment = Enum.TextXAlignment.Left
 searchInput.Parent = searchBox
 
 searchInput.Focused:Connect(function()
-	searchStroke.Color = THEME.brandTeal
+	-- focus outline removed
 end)
 searchInput.FocusLost:Connect(function()
 	searchStroke.Color = THEME.border
@@ -3371,8 +3371,8 @@ do
 		tiltGlareGrad.Rotation = 25 + tiltX * 12
 
 		-- Edge glow picks up the live accent while hovered
-		heroStroke.Color = Color3.fromRGB(255, 255, 255):Lerp(THEME.primary, tiltHover)
-		heroStroke.Transparency = 0.91 - 0.5 * tiltHover
+--		heroStroke.Color = Color3.fromRGB(255, 255, 255):Lerp(THEME.primary, tiltHover)
+--		heroStroke.Transparency = 0.91 - 0.5 * tiltHover
 	end)
 
 	local heroLeft = Instance.new("Frame")
@@ -3842,7 +3842,7 @@ configName.TextXAlignment = Enum.TextXAlignment.Left
 configName.Parent = settingsActionBox
 
 configName.Focused:Connect(function()
-	settingsActionStroke.Color = THEME.brandTeal
+	-- focus outline removed
 end)
 configName.FocusLost:Connect(function()
 	settingsActionStroke.Color = THEME.border
