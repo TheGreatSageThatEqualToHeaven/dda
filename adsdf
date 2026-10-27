@@ -84,7 +84,7 @@ gui.Parent = targetGuiParent
 --------------------------------------------------------------------------------
 -- ONE accent color drives every highlight: toggles, sliders, tabs, categories,
 -- badges, checkmarks, focus outlines, buttons and the loader bar.
-local ACCENT = Color3.fromRGB(0, 163, 124)
+local ACCENT = Color3.fromRGB(244, 245, 246) -- starts on the Pure White theme
 local CUSTOM_CURSOR_ID = "rbxassetid://15659024331" -- Custom cursor texture ID
 
 local THEME = {
@@ -107,7 +107,7 @@ local THEME = {
 	toggleOffKnob  = Color3.fromRGB(120, 122, 128),   -- var(--muted-foreground)
 	primary        = ACCENT,                          -- unified accent: active controls and tab underline
 	toggleOnTrack  = ACCENT,                          -- unified accent
-	toggleOnKnob   = Color3.fromRGB(255, 255, 255),   -- white knob, same as slider thumb
+	toggleOnKnob   = Color3.fromRGB(10, 10, 13),       -- dark knob so it shows on the white accent track
 	accentHover    = ACCENT:Lerp(Color3.fromRGB(255, 255, 255), 0.18),
 }
 
@@ -3505,11 +3505,11 @@ do
 			busy = true
 			local ok = copyToClipboard(info.link)
 			text.Text = ok and "Link copied!" or "Copy not supported"
-			text.TextColor3 = ok and Color3.fromRGB(80, 220, 140) or Color3.fromRGB(255, 110, 110)
+			text.TextColor3 = ok and THEME.primary or Color3.fromRGB(255, 110, 110)
 			if ok then
 				local ic = ICONS and ICONS["check"]
 				if ic then copyIcon.Image = ic.url end
-				copyIcon.ImageColor3 = Color3.fromRGB(80, 220, 140)
+				copyIcon.ImageColor3 = THEME.primary
 			end
 			task.delay(1.6, function()
 				if not btn.Parent then return end
