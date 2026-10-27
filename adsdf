@@ -3463,6 +3463,7 @@ do
 		return button
 	end
 
+	do
 	-- Community links (click to copy). Replace the placeholder text with real links.
 	local COMMUNITY_LINKS = {
 		{ id = "Discord", label = "Discord server", icon = "message-circle", link = "https://discord.gg/your-invite", color = Color3.fromRGB(88, 101, 242) },
@@ -3520,6 +3521,7 @@ do
 				busy = false
 			end)
 		end)
+	end
 	end
 
 	local statusPanel = makePanel("StatusPanel", "Status", "clock", 2)
